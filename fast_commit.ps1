@@ -7,13 +7,12 @@ function Initialize-GitBranches {
         
         # Create and switch to master branch
         git checkout -b master
-        
-        # Create initial commit if needed
-        if (-not (git log -n 1 2>$null)) {
+        # Create initial commit if needed if remote only has main
+        git fetch
+        if (git remote show origin | Select-String -Pattern "main") {
             Write-Host "Creating initial commit..."
             git commit --allow-empty -m "Initial commit"
         }
-        
         # Create and push develop branch
         git checkout -b develop
         
