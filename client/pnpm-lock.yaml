@@ -106,6 +106,9 @@ dependencies:
   embla-carousel-react:
     specifier: 8.5.1
     version: 8.5.1(react@19.0.0)
+  idb:
+    specifier: ^8.0.2
+    version: 8.0.2
   input-otp:
     specifier: 1.4.1
     version: 1.4.1(react-dom@19.0.0)(react@19.0.0)
@@ -117,7 +120,7 @@ dependencies:
     version: 15.2.4(react-dom@19.0.0)(react@19.0.0)
   next-themes:
     specifier: latest
-    version: 0.4.4(react-dom@19.0.0)(react@19.0.0)
+    version: 0.4.6(react-dom@19.0.0)(react@19.0.0)
   react:
     specifier: ^19
     version: 19.0.0
@@ -127,6 +130,9 @@ dependencies:
   react-dom:
     specifier: ^19
     version: 19.0.0(react@19.0.0)
+  react-draggable:
+    specifier: ^4.4.6
+    version: 4.4.6(react-dom@19.0.0)(react@19.0.0)
   react-hook-form:
     specifier: ^7.54.1
     version: 7.54.1(react@19.0.0)
@@ -1930,6 +1936,11 @@ packages:
     resolution: {integrity: sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA==}
     dev: false
 
+  /clsx@1.2.1:
+    resolution: {integrity: sha512-EcR6r5a8bj6pu3ycsa/E/cKVGuTgZJZdsyUYHOksG/UHIiKfjxzRxYJpyVBwYaQeOvghal9fcc4PidlgzugAQg==}
+    engines: {node: '>=6'}
+    dev: false
+
   /clsx@2.1.1:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
@@ -2423,6 +2434,10 @@ packages:
       safer-buffer: 2.1.2
     dev: false
 
+  /idb@8.0.2:
+    resolution: {integrity: sha512-CX70rYhx7GDDQzwwQMDwF6kDRQi5vVs6khHUumDrMecBylKkwvZ8HWvKV08AGb7VbpoGCWUQ4aHzNDgoUiOIUg==}
+    dev: false
+
   /input-otp@1.4.1(react-dom@19.0.0)(react@19.0.0):
     resolution: {integrity: sha512-+yvpmKYKHi9jIGngxagY9oWiiblPB7+nEO75F2l2o4vs+6vpPZZmUl4tBNYuTCvQjhvEIbdNeJu70bhfYP2nbw==}
     peerDependencies:
@@ -2568,8 +2583,8 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  /next-themes@0.4.4(react-dom@19.0.0)(react@19.0.0):
-    resolution: {integrity: sha512-LDQ2qIOJF0VnuVrrMSMLrWGjRMkq+0mpgl6e0juCLqdJ+oo8Q84JRWT6Wh11VDQKkMMe+dVzDKLWs5n87T+PkQ==}
+  /next-themes@0.4.6(react-dom@19.0.0)(react@19.0.0):
+    resolution: {integrity: sha512-pZvgD5L0IEvX5/9GWyHMf3m8BKiVQwsCMHfoFosXtXBMnaS0ZnIJ9ST4b4NqLVKDEm8QBxoNNGNaBv2JNF6XNA==}
     peerDependencies:
       react: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
       react-dom: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
@@ -2785,6 +2800,18 @@ packages:
     dependencies:
       react: 19.0.0
       scheduler: 0.25.0
+    dev: false
+
+  /react-draggable@4.4.6(react-dom@19.0.0)(react@19.0.0):
+    resolution: {integrity: sha512-LtY5Xw1zTPqHkVmtM3X8MUOxNDOUhv/khTgBgrUvwaS064bwVvxT+q5El0uUFNx5IEPKXuRejr7UqLwBIg5pdw==}
+    peerDependencies:
+      react: '>= 16.3.0'
+      react-dom: '>= 16.3.0'
+    dependencies:
+      clsx: 1.2.1
+      prop-types: 15.8.1
+      react: 19.0.0
+      react-dom: 19.0.0(react@19.0.0)
     dev: false
 
   /react-hook-form@7.54.1(react@19.0.0):
