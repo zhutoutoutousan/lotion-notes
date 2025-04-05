@@ -8,7 +8,7 @@
 |_____|____/|_| |_|_| \\_|____/  |_| |____/ 
 ```
 
-A modern, AI-powered note-taking and task management application with calendar integration.
+A modern, AI-powered self-management application with calendar integration.
 
 ## 🌟 Features
 
@@ -25,10 +25,19 @@ A modern, AI-powered note-taking and task management application with calendar i
 - Export to ICS format for Google Calendar and other applications
 - AI-powered task scheduling
 
+### 🌍 Language Learning
+- Support for 10+ languages including English, Spanish, Portuguese, German, French, Japanese, Russian, Hindi, and Korean
+- Interactive vocabulary flashcards with spaced repetition
+- Grammar exercises and quizzes
+- Pronunciation practice with AI feedback
+- Progress tracking and personalized learning paths
+- Cultural context and usage examples
+
 ### 🤖 AI Integration
 - Smart task scheduling based on priority and available time
 - Content generation and summarization
 - Intelligent time management
+- AI-powered language learning assistance
 
 ### 🎨 Modern UI
 - Clean, intuitive interface
@@ -90,6 +99,18 @@ yarn dev
 5. Resize events to adjust duration
 6. Click the "Export" button to download your calendar as an ICS file
 
+### Learning Languages
+1. Navigate to the Language Learning tab
+2. Select your target language from the available options
+3. Choose your proficiency level (beginner, intermediate, advanced)
+4. Explore different learning modules:
+   - Vocabulary flashcards
+   - Grammar exercises
+   - Pronunciation practice
+   - Cultural context lessons
+5. Track your progress in the dashboard
+6. Set learning goals and receive personalized recommendations
+
 ### AI Task Scheduling
 1. Navigate to the Calendar tab
 2. Click "AI Schedule" in the top right
@@ -104,6 +125,7 @@ yarn dev
 - **Database**: Supabase
 - **AI**: OpenAI API
 - **Calendar**: Custom implementation with drag-and-drop support
+- **Language Learning**: Custom implementation with spaced repetition algorithm
 
 ## 📄 License
 

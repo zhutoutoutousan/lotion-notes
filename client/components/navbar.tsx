@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ModeToggle } from "@/components/mode-toggle"
+import { PencilIcon } from "@heroicons/react/24/outline"
 
 export default function Navbar() {
   const pathname = usePathname()
