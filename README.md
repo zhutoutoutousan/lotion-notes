@@ -33,11 +33,21 @@ A modern, AI-powered self-management application with calendar integration.
 - Progress tracking and personalized learning paths
 - Cultural context and usage examples
 
+### 📰 News Explorer
+- Browse news articles from multiple sources
+- AI-powered translation of articles to multiple languages
+- Location detection for news articles
+- Interactive map visualization of article locations
+- Batch location detection for multiple articles
+- Vocabulary extraction for language learning
+
 ### 🤖 AI Integration
 - Smart task scheduling based on priority and available time
 - Content generation and summarization
 - Intelligent time management
 - AI-powered language learning assistance
+- Location detection from text content
+- Multi-language translation
 
 ### 🎨 Modern UI
 - Clean, intuitive interface
@@ -50,6 +60,7 @@ A modern, AI-powered self-management application with calendar integration.
 - Node.js (v14 or higher)
 - npm or yarn
 - Supabase account (for database)
+- DeepSeek API key (for location detection and translation)
 
 ### Installation
 
@@ -71,6 +82,7 @@ Create a `.env.local` file in the root directory with the following variables:
 ```
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+DEEPSEEK_API_KEY=your_deepseek_api_key
 ```
 
 4. Run the development server
@@ -111,6 +123,18 @@ yarn dev
 5. Track your progress in the dashboard
 6. Set learning goals and receive personalized recommendations
 
+### Exploring News
+1. Navigate to the News tab
+2. Browse articles from different sources
+3. Use the search bar to find specific topics
+4. Filter by category or language
+5. Click on an article to view details
+6. Use the "Detect Location" button to identify geographic locations mentioned in the article
+7. Use the "Detect All Locations" button to process multiple articles at once
+8. View article locations on the interactive map
+9. Translate articles to your preferred language
+10. Extract vocabulary for language learning
+
 ### AI Task Scheduling
 1. Navigate to the Calendar tab
 2. Click "AI Schedule" in the top right
@@ -123,9 +147,10 @@ yarn dev
 - **Frontend**: Next.js, React, TypeScript
 - **Styling**: Tailwind CSS, Shadcn UI
 - **Database**: Supabase
-- **AI**: OpenAI API
+- **AI**: OpenAI API, DeepSeek API
 - **Calendar**: Custom implementation with drag-and-drop support
 - **Language Learning**: Custom implementation with spaced repetition algorithm
+- **Maps**: Leaflet.js for interactive map visualization
 
 ## 📄 License
 
@@ -136,8 +161,10 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [Next.js](https://nextjs.org/)
 - [Supabase](https://supabase.io/)
 - [OpenAI](https://openai.com/)
+- [DeepSeek](https://deepseek.com/)
 - [Shadcn UI](https://ui.shadcn.com/)
 - [Tailwind CSS](https://tailwindcss.com/)
+- [Leaflet.js](https://leafletjs.com/)
 
 ---
 
