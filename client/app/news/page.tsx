@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,6 +22,17 @@ import {
 } from "@/services/news-service";
 import { openDB, IDBPDatabase } from 'idb';
 import NewsMap from "@/components/NewsMap";
+
+interface TranslationResult {
+  text: string;
+  vocabulary?: Array<{
+    word: string;
+    translation: string;
+    example: string;
+  }>;
+  grammar?: string;
+  bilingualExample?: string;
+}
 
 // Supported languages for translation
 const supportedLanguages = [
@@ -58,7 +69,7 @@ const SUPPORTED_LANGUAGES = [
   { code: "ko", name: "Korean" },
 ];
 
-export default function NewsPage() {
+function NewsPageContent() {
   const searchParams = useSearchParams();
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,7 +259,13 @@ export default function NewsPage() {
       
       setSelectedArticle({
         ...selectedArticle,
-        translation
+        translation: {
+          ...selectedArticle.translation,
+          description: translation.text,
+          vocabulary: translation.vocabulary,
+          grammar: translation.grammar,
+          bilingualExample: translation.bilingualExample
+        }
       });
     } catch (err) {
       setTranslationError("Failed to translate the article. Please try again later.");
@@ -632,7 +649,7 @@ export default function NewsPage() {
                         <div>
                           <h3 className="font-medium mb-2">Vocabulary</h3>
                           <ul className="list-disc pl-5 space-y-1">
-                            {selectedArticle.translation.vocabulary.map((item, index) => (
+                            {selectedArticle.translation.vocabulary?.map((item, index) => (
                               <li key={index}>
                                 <span className="font-medium">{item.word}</span> → {item.translation}
                                 <p className="text-sm text-muted-foreground">{item.example}</p>
@@ -730,5 +747,20 @@ export default function NewsPage() {
         </div>
       </Tabs>
     </div>
+  );
+}
+
+export default function NewsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading news...</p>
+        </div>
+      </div>
+    }>
+      <NewsPageContent />
+    </Suspense>
   );
 } 
