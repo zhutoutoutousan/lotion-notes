@@ -17,12 +17,23 @@ export interface NewsArticle {
     title?: string;
     description?: string;
     content?: string;
+    vocabulary?: Array<{
+      word: string;
+      translation: string;
+      example: string;
+    }>;
+    grammar?: string;
+    bilingualExample?: string;
   };
 }
 
 export interface TranslationResult {
   text: string;
-  vocabulary: Array<{ word: string; translation: string; example: string }>;
+  vocabulary: Array<{
+    word: string;
+    translation: string;
+    example: string;
+  }>;
   grammar: string;
   bilingualExample: string;
 }
