@@ -3,16 +3,36 @@
 // Types
 export interface NewsArticle {
   id: string;
+  article_id: string;
   title: string;
+  link: string;
+  keywords: string[];
+  creator: string | null;
   description: string;
-  url: string;
-  image: string;
-  source: string;
-  publishedAt: string;
-  category: string;
+  content: string;
+  pubDate: string;
+  pubDateTZ: string;
+  image_url: string | null;
+  video_url: string | null;
+  source_id: string;
+  source_name: string;
+  source_priority: number;
+  source_url: string;
+  source_icon: string;
   language: string;
-  content?: string;
-  location?: Location;
+  country: string[];
+  category: string[];
+  sentiment: string;
+  sentiment_stats: string;
+  ai_tag: string;
+  ai_region: string;
+  ai_org: string;
+  duplicate: boolean;
+  location?: {
+    name: string;
+    latitude: number;
+    longitude: number;
+  };
   translation?: {
     title?: string;
     description?: string;
@@ -20,10 +40,8 @@ export interface NewsArticle {
     vocabulary?: Array<{
       word: string;
       translation: string;
-      example: string;
+      context: string;
     }>;
-    grammar?: string;
-    bilingualExample?: string;
   };
 }
 
@@ -52,55 +70,54 @@ const DEEPSEEK_API_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY || "YOUR_DEEPS
 
 // NewsData.io API
 export async function fetchNewsDataArticles(
-  query: string = "latest",
-  language: string = "en",
-  category: string = "all"
+  query: string = '',
+  category: string = 'all',
+  country: string = 'all',
+  language: string = 'en'
 ): Promise<NewsArticle[]> {
   try {
-    // Ensure query is not empty
-    const searchQuery = query.trim() || "latest";
-    
-    // Build the API URL with parameters
-    const url = new URL("https://newsdata.io/api/1/news");
-    url.searchParams.append("apikey", NEWSDATA_API_KEY);
-    url.searchParams.append("q", searchQuery);
-    url.searchParams.append("language", language);
-    
-    // Only add category if it's not "all"
-    if (category !== "all") {
-      url.searchParams.append("category", category);
+    const apiKey = process.env.NEXT_PUBLIC_NEWSDATA_API_KEY;
+    if (!apiKey) {
+      throw new Error('NewsData.io API key not configured');
     }
-    
-    // Make the API request
-    const response = await fetch(url.toString());
+
+    // Build the query parameters
+    const params = new URLSearchParams({
+      apikey: apiKey,
+      q: query || '',
+      language: language !== 'all' ? language : 'en',
+    });
+
+    const response = await fetch(`https://newsdata.io/api/1/news?${params.toString()}`);
     
     if (!response.ok) {
-      throw new Error(`NewsData.io API error: ${response.statusText}`);
+      const errorData = await response.json();
+      throw new Error(errorData.results?.message || 'Failed to fetch news articles');
     }
-    
+
     const data = await response.json();
     
-    // Check for API errors
-    if (data.status === "error") {
-      console.error("NewsData.io API error:", data.results);
-      throw new Error(data.results?.message || "Unknown error from NewsData.io API");
+    if (!data.results || !Array.isArray(data.results)) {
+      throw new Error('Invalid response format from NewsData.io API');
     }
-    
-    // Process and return the articles
+
     return data.results.map((article: any) => ({
-      id: article.link || Math.random().toString(36).substring(2, 9),
+      article_id: article.article_id || article.link,
       title: article.title,
       description: article.description,
-      url: article.link,
-      image: article.image_url,
-      source: article.source_id,
-      publishedAt: new Date(article.pubDate).toLocaleDateString(),
-      category: article.category?.[0] || "general",
-      language: article.language,
       content: article.content,
+      image_url: article.image_url,
+      source_name: article.source_id,
+      source_url: article.link,
+      source_icon: article.source_icon,
+      pubDate: article.pubDate,
+      country: article.country ? [article.country] : [],
+      category: article.category ? [article.category] : [],
+      creator: article.creator ? [article.creator] : [],
+      language: article.language,
     }));
   } catch (error) {
-    console.error("Error fetching news from NewsData.io:", error);
+    console.error('Error fetching news articles:', error);
     throw error;
   }
 }
@@ -126,16 +143,32 @@ export const fetchTheNewsAPIArticles = async (
 
     if (data.data) {
       return data.data.map((article: any) => ({
-        id: article.uuid || Math.random().toString(36).substring(2, 9),
+        article_id: article.uuid || Math.random().toString(36).substring(2, 9),
         title: article.title,
+        link: article.url,
+        keywords: article.keywords || [],
+        creator: article.creator || null,
         description: article.description || "No description available",
-        url: article.url,
-        image: article.image_url || "https://via.placeholder.com/300x200?text=No+Image",
-        source: article.source,
-        publishedAt: new Date(article.published_at).toLocaleDateString(),
-        category: article.categories?.[0] || "general",
-        language: article.language || "en",
         content: article.content,
+        pubDate: article.published_at,
+        pubDateTZ: article.published_at_tz,
+        image_url: article.image_url || "https://via.placeholder.com/300x200?text=No+Image",
+        video_url: article.video_url,
+        source_id: article.source,
+        source_name: article.source_name,
+        source_priority: article.source_priority,
+        source_url: article.url,
+        source_icon: article.source_icon,
+        language: article.language || "en",
+        country: article.country || [],
+        category: article.categories || [],
+        sentiment: article.sentiment,
+        sentiment_stats: article.sentiment_stats,
+        ai_tag: article.ai_tag,
+        ai_region: article.ai_region,
+        ai_org: article.ai_org,
+        duplicate: article.duplicate,
+        location: article.location
       }));
     } else {
       throw new Error("Failed to fetch news");
@@ -349,42 +382,70 @@ function getBilingualExample(language: string): string {
  * @param title The article title
  * @param description The article description
  * @param content Optional article content
- * @returns A Location object or null if no location could be detected
+ * @returns A Location object with creative reasoning
  */
 export async function detectLocationWithDeepSeek(
   title: string,
   description: string,
   content?: string
-): Promise<Location | null> {
+): Promise<Location> {
   try {
     // Combine the text for analysis
     const textToAnalyze = `${title}. ${description}${content ? `. ${content}` : ''}`;
     
     // Create a prompt for the DeepSeek API
     const prompt = `
-      Analyze the following news article text and extract the primary geographic location mentioned.
-      If multiple locations are mentioned, choose the most relevant one.
-      If no specific location is mentioned, return null.
-      
+      You are a creative location detective with a flair for storytelling. Your task is to analyze news articles and determine the most relevant geographic location, even when no location is explicitly mentioned.
+
+      For the following article text, provide a creative and thoughtful analysis that includes:
+      1. The chosen location
+      2. Your reasoning process
+      3. A creative narrative about why this location is significant
+      4. Any interesting connections or metaphors you discovered
+
       Text: "${textToAnalyze}"
-      
+
       Return a JSON object with the following structure:
       {
         "name": "Location Name",
         "latitude": latitude as number,
-        "longitude": longitude as number
+        "longitude": longitude as number,
+        "reasoning": {
+          "analysis": "Your detailed analysis of the text",
+          "creative_connection": "A creative narrative connecting the article to the location",
+          "metaphor": "An interesting metaphor or analogy",
+          "confidence": "high|medium|low",
+          "alternative_locations": ["List of other possible locations that could fit"]
+        }
       }
-      
-      If no location is found, return null.
+
+      Be creative and imaginative in your analysis. For example:
+      - If it's about AI: "Like a digital phoenix rising from the silicon ashes of Moore's Law, this story finds its home in Silicon Valley..."
+      - If it's about climate change: "The Arctic, a frozen sentinel of our planet's health, stands as the perfect backdrop for this environmental narrative..."
+      - If it's about space: "Houston, we have a story! The Johnson Space Center becomes the gravitational center of this cosmic tale..."
+      - If it's about art: "Paris, the city of light and inspiration, illuminates this creative journey..."
+
+      IMPORTANT: Always provide a location, even if you need to make an imaginative connection.
+      Your reasoning should be creative and engaging, making the location choice feel meaningful and intentional.
     `;
     
     // Call the DeepSeek API
-    const response = await fetch('/api/deepseek', {
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: prompt
+          }
+        ],
+        temperature: 0.8 // Increased temperature for more creative responses
+      })
     });
     
     if (!response.ok) {
@@ -395,14 +456,18 @@ export async function detectLocationWithDeepSeek(
     
     // Parse the response
     try {
-      // Extract the content from the DeepSeek API response
       const content = data.choices[0].message.content;
-      
-      // Extract the JSON string from the content (it's wrapped in ```json and ```)
       const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/);
       
       if (jsonMatch && jsonMatch[1]) {
         const locationData = JSON.parse(jsonMatch[1]);
+        
+        // Log the creative reasoning to console
+        console.log('Location Analysis:', {
+          article: textToAnalyze,
+          location: locationData.name,
+          reasoning: locationData.reasoning
+        });
         
         // Validate the location data
         if (
@@ -414,7 +479,7 @@ export async function detectLocationWithDeepSeek(
           return {
             name: locationData.name,
             latitude: locationData.latitude,
-            longitude: locationData.longitude,
+            longitude: locationData.longitude
           };
         }
       }
@@ -422,9 +487,106 @@ export async function detectLocationWithDeepSeek(
       console.error('Failed to parse location data:', parseError);
     }
     
-    return null;
+    // Fallback location (New York City) if parsing fails
+    return {
+      name: "New York City, USA",
+      latitude: 40.7128,
+      longitude: -74.0060
+    };
   } catch (error) {
     console.error('Error detecting location:', error);
-    return null;
+    // Fallback location (New York City) if API call fails
+    return {
+      name: "New York City, USA",
+      latitude: 40.7128,
+      longitude: -74.0060
+    };
+  }
+}
+
+export async function fetchAllNewsArticles(
+  query: string = "latest",
+  language: string = "en",
+  category: string = "all"
+): Promise<NewsArticle[]> {
+  try {
+    const [newsDataArticles, theNewsAPIArticles] = await Promise.all([
+      fetchNewsDataArticles(query, language, category),
+      fetchTheNewsAPIArticles(query, language, category)
+    ]);
+
+    // Combine and deduplicate articles
+    const combinedArticles = [...newsDataArticles, ...theNewsAPIArticles];
+    const uniqueArticles = Array.from(new Map(
+      combinedArticles.map(article => [article.article_id, article])
+    ).values());
+
+    return uniqueArticles;
+  } catch (error) {
+    console.error('Error fetching combined news articles:', error);
+    return [];
+  }
+}
+
+// Add language learning game interface
+export interface LanguageGame {
+  word: string;
+  translation: string;
+  context: string;
+  options: string[];
+  correctAnswer: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export async function generateLanguageGame(
+  article: NewsArticle,
+  targetLanguage: string
+): Promise<LanguageGame[]> {
+  try {
+    const prompt = `Create a language learning game based on this news article:
+Title: ${article.title}
+Description: ${article.description}
+Content: ${article.content}
+
+Create 5 vocabulary questions with:
+1. The word in the original language
+2. Its translation in ${targetLanguage}
+3. The context from the article
+4. 4 multiple choice options (including the correct answer)
+5. Difficulty level based on word complexity
+
+Return the response in this JSON format:
+{
+  "questions": [
+    {
+      "word": "original word",
+      "translation": "translated word",
+      "context": "sentence from article",
+      "options": ["option1", "option2", "option3", "option4"],
+      "correctAnswer": "correct option",
+      "difficulty": "easy|medium|hard"
+    }
+  ]
+}`;
+
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7
+      })
+    });
+
+    const data = await response.json();
+    const gameData = JSON.parse(data.choices[0].message.content);
+    return gameData.questions;
+  } catch (error) {
+    console.error('Error generating language game:', error);
+    return [];
   }
 } 
