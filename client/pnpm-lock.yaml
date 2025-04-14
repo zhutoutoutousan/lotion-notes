@@ -127,6 +127,9 @@ dependencies:
   leaflet:
     specifier: ^1.9.4
     version: 1.9.4
+  leaflet.markercluster:
+    specifier: ^1.5.3
+    version: 1.5.3(leaflet@1.9.4)
   lucide-react:
     specifier: ^0.454.0
     version: 0.454.0(react@19.0.0)
@@ -3166,6 +3169,14 @@ packages:
     engines: {node: '>=12'}
     dependencies:
       lodash-es: 4.17.21
+    dev: false
+
+  /leaflet.markercluster@1.5.3(leaflet@1.9.4):
+    resolution: {integrity: sha512-vPTw/Bndq7eQHjLBVlWpnGeLa3t+3zGiuM7fJwCkiMFq+nmRuG3RI3f7f4N4TDX7T4NpbAXpR2+NTRSEGfCSeA==}
+    peerDependencies:
+      leaflet: ^1.3.1
+    dependencies:
+      leaflet: 1.9.4
     dev: false
 
   /leaflet@1.9.4:
