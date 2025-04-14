@@ -6,6 +6,8 @@ import { Toaster } from "@/components/ui/toaster"
 import { DataPanel } from "@/components/DataPanel"
 import Sidebar from "@/components/sidebar"
 import AIChatPanelWrapper from "@/components/ai-chat-panel-wrapper"
+import { TerminalProvider } from '@/contexts/TerminalContext'
+import TerminalWrapper from '@/components/TerminalWrapper'
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -75,27 +77,29 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem={false}
-          disableTransitionOnChange
-        >
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <main className="flex-1 ">
-              {children}
-            </main>
-            <DataPanel />
-          </div>
-          <AIChatPanelWrapper />
-          <Toaster />
-        </ThemeProvider>
+        <TerminalProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem={false}
+            disableTransitionOnChange
+          >
+            <TerminalWrapper>
+              <div className="flex min-h-screen">
+                <Sidebar />
+                <main className="flex-1">
+                  {children}
+                </main>
+                <DataPanel />
+              </div>
+              <AIChatPanelWrapper />
+              <Toaster />
+            </TerminalWrapper>
+          </ThemeProvider>
+        </TerminalProvider>
       </body>
     </html>
   )
 }
-
-
 
 import './globals.css'
