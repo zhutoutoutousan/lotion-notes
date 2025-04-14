@@ -22,7 +22,7 @@ import {
   fetchAllNewsArticles
 } from "@/services/news-service";
 import { openDB, IDBPDatabase } from 'idb';
-import NewsMap from "@/components/NewsMap";
+import dynamic from 'next/dynamic';
 import Image from "next/image";
 import NewsCard from '@/components/NewsCard';
 import { ArticleDetails } from '@/components/ArticleDetails';
@@ -97,6 +97,16 @@ const SUPPORTED_LANGUAGES = [
   { code: "ja", name: "Japanese" },
   { code: "ko", name: "Korean" },
 ];
+
+// Dynamically import the NewsMap component with no SSR
+const NewsMap = dynamic(() => import('@/components/NewsMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[600px] flex items-center justify-center bg-gray-100">
+      <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+    </div>
+  )
+});
 
 function NewsPageContent() {
   const searchParams = useSearchParams();
