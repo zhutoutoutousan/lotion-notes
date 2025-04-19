@@ -2,7 +2,7 @@
 
 // Database name and version
 const DB_NAME = "language_learning";
-const DB_VERSION = 4;
+const DB_VERSION = 6;
 
 // Store names
 export const STORES = {
@@ -16,8 +16,19 @@ export const STORES = {
   LIFE_PROGRESS: 'lifeProgress',
   HEALTH_REMINDERS: 'healthReminders',
   HEALTH_CHECKUPS: 'healthCheckups',
-  NEWS_ARTICLES: 'newsArticles'
+  NEWS_ARTICLES: 'newsArticles',
+  LANGUAGE_TRAINING: 'languageTraining',
+  TRAINING_TEMPLATES: 'trainingTemplates'
 };
+
+// Add new store name
+const STORE_NAMES = {
+  LANGUAGES: 'languages',
+  PROFICIENCY_LEVELS: 'proficiency_levels',
+  VOCABULARY: 'vocabulary',
+  USER_PROGRESS: 'user_progress',
+  DAILY_TRAINING: 'daily_training'
+} as const;
 
 // Types
 export interface Language {
@@ -146,108 +157,109 @@ export interface NewsArticle {
   };
 }
 
+// Add new interfaces for training tracking
+export interface TrainingItem {
+  language_id: string;
+  date: string;
+  item_name: string;
+  percentage: number;
+  minutes: number;
+  status: 'Not Started' | 'In Progress' | 'Completed';
+  bookmarks: string[];
+}
+
+export interface DailyTraining {
+  language_id: string;
+  date: string;
+  total_minutes: number;
+  items: TrainingItem[];
+}
+
+// Add new types for training templates
+export interface TrainingTemplate {
+  id: string;
+  name: string;
+  activities: {
+    id: number;
+    name: string;
+    percentage: number;
+    minutes: number;
+    status: "Not Started" | "In Progress" | "Completed";
+  }[];
+  language_id: string;
+  created_at: string;
+}
+
+export interface Activity {
+  name: string;
+  percentage: number;
+  minutes: number;
+  status: "Not Started" | "In Progress" | "Completed";
+}
+
 // Initialize the database
-export async function initDB(): Promise<IDBDatabase> {
+export const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onerror = (event) => {
-      console.error("Failed to open database:", event);
-      reject(new Error("Failed to open database"));
+    request.onerror = () => {
+      console.error("Error opening database");
+      reject(request.error);
     };
 
-    request.onsuccess = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
+    request.onsuccess = () => {
       console.log("Database opened successfully");
-      resolve(db);
+      resolve(request.result);
     };
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      console.log("Database upgrade needed");
-      
-      // Check if stores already exist before creating them
-      const existingStores = Array.from(db.objectStoreNames);
-      console.log("Existing stores:", existingStores);
-      
-      // Create object stores only if they don't exist
-      if (!existingStores.includes(STORES.LANGUAGES)) {
-        console.log("Creating languages store");
-        const languagesStore = db.createObjectStore(STORES.LANGUAGES, { keyPath: "id" });
-        languagesStore.createIndex("name", "name", { unique: true });
-      }
-      
-      if (!existingStores.includes(STORES.PROFICIENCY_LEVELS)) {
-        console.log("Creating proficiency levels store");
-        const proficiencyLevelsStore = db.createObjectStore(STORES.PROFICIENCY_LEVELS, { keyPath: "id" });
-        proficiencyLevelsStore.createIndex("name", "name", { unique: true });
-      }
-      
-      if (!existingStores.includes(STORES.VOCABULARY)) {
-        console.log("Creating vocabulary store");
-        const vocabularyStore = db.createObjectStore(STORES.VOCABULARY, { keyPath: "id", autoIncrement: true });
-        vocabularyStore.createIndex("source_language_id", "source_language_id", { unique: false });
-        vocabularyStore.createIndex("target_language_id", "target_language_id", { unique: false });
-        vocabularyStore.createIndex("difficulty", "difficulty", { unique: false });
-        vocabularyStore.createIndex("language_pair_difficulty", ["source_language_id", "target_language_id", "difficulty"], { unique: false });
-      }
-      
-      if (!existingStores.includes(STORES.GRAMMAR_SECTIONS)) {
-        console.log("Creating grammar sections store");
-        const grammarSectionsStore = db.createObjectStore(STORES.GRAMMAR_SECTIONS, { keyPath: "id", autoIncrement: true });
-        grammarSectionsStore.createIndex("language_id", "language_id", { unique: false });
-        grammarSectionsStore.createIndex("difficulty", "difficulty", { unique: false });
-        grammarSectionsStore.createIndex("language_difficulty", ["language_id", "difficulty"], { unique: false });
-      }
-      
-      if (!existingStores.includes(STORES.GRAMMAR_EXERCISES)) {
-        console.log("Creating grammar exercises store");
-        const grammarExercisesStore = db.createObjectStore(STORES.GRAMMAR_EXERCISES, { keyPath: "id", autoIncrement: true });
-        grammarExercisesStore.createIndex("section_id", "section_id", { unique: false });
-      }
-      
-      if (!existingStores.includes(STORES.USER_PROGRESS)) {
-        console.log("Creating user progress store");
-        const userProgressStore = db.createObjectStore(STORES.USER_PROGRESS, { keyPath: "id", autoIncrement: true });
-        userProgressStore.createIndex("user_id", "user_id", { unique: false });
-        userProgressStore.createIndex("language_id", "language_id", { unique: false });
-        userProgressStore.createIndex("user_language", ["user_id", "language_id"], { unique: true });
+
+      // Create or upgrade stores
+      if (!db.objectStoreNames.contains("LANGUAGES")) {
+        const languageStore = db.createObjectStore("LANGUAGES", { keyPath: "id" });
+        languageStore.createIndex("name", "name", { unique: true });
       }
 
-      // Create new stores for life guide and health
-      if (!existingStores.includes(STORES.LIFE_STAGES)) {
-        console.log("Creating life stages store");
-        db.createObjectStore(STORES.LIFE_STAGES, { keyPath: 'id' });
-      }
-      if (!existingStores.includes(STORES.LIFE_PROGRESS)) {
-        console.log("Creating life progress store");
-        const lifeProgressStore = db.createObjectStore(STORES.LIFE_PROGRESS, { keyPath: 'id' });
-        lifeProgressStore.createIndex('user_stage', ['user_id', 'stage_id'], { unique: true });
-      }
-      if (!existingStores.includes(STORES.HEALTH_REMINDERS)) {
-        console.log("Creating health reminders store");
-        const healthRemindersStore = db.createObjectStore(STORES.HEALTH_REMINDERS, { keyPath: 'id' });
-        healthRemindersStore.createIndex('user_type', ['user_id', 'type'], { unique: false });
-        healthRemindersStore.createIndex('next_due', 'next_due', { unique: false });
-      }
-      if (!existingStores.includes(STORES.HEALTH_CHECKUPS)) {
-        console.log("Creating health checkups store");
-        const healthCheckupsStore = db.createObjectStore(STORES.HEALTH_CHECKUPS, { keyPath: 'id' });
-        healthCheckupsStore.createIndex('user_type', ['user_id', 'type'], { unique: false });
-        healthCheckupsStore.createIndex('date', 'date', { unique: false });
+      if (!db.objectStoreNames.contains("PROFICIENCY_LEVELS")) {
+        const proficiencyStore = db.createObjectStore("PROFICIENCY_LEVELS", { keyPath: "id" });
+        proficiencyStore.createIndex("language_id", "language_id", { unique: false });
       }
 
-      if (!existingStores.includes(STORES.NEWS_ARTICLES)) {
-        console.log("Creating news articles store");
-        const newsStore = db.createObjectStore(STORES.NEWS_ARTICLES, { keyPath: 'article_id' });
-        newsStore.createIndex('category', 'category', { unique: false });
-        newsStore.createIndex('language', 'language', { unique: false });
-        newsStore.createIndex('country', 'country', { unique: false });
-        newsStore.createIndex('published_at', 'published_at', { unique: false });
+      if (!db.objectStoreNames.contains("VOCABULARY")) {
+        const vocabularyStore = db.createObjectStore("VOCABULARY", { keyPath: "id" });
+        vocabularyStore.createIndex("language_id", "language_id", { unique: false });
+        vocabularyStore.createIndex("word", "word", { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains("GRAMMAR_EXERCISES")) {
+        const grammarStore = db.createObjectStore("GRAMMAR_EXERCISES", { keyPath: "id" });
+        grammarStore.createIndex("language_id", "language_id", { unique: false });
+        grammarStore.createIndex("topic", "topic", { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains("newsArticles")) {
+        const newsStore = db.createObjectStore("newsArticles", { keyPath: "id" });
+        newsStore.createIndex("category", "category", { unique: false });
+        newsStore.createIndex("language", "language", { unique: false });
+        newsStore.createIndex("country", "country", { unique: false });
+        newsStore.createIndex("published_at", "published_at", { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains("dailyTraining")) {
+        const trainingStore = db.createObjectStore("dailyTraining", { keyPath: "id" });
+        trainingStore.createIndex("language_id", "language_id", { unique: false });
+        trainingStore.createIndex("date", "date", { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(STORES.TRAINING_TEMPLATES)) {
+        const templatesStore = db.createObjectStore(STORES.TRAINING_TEMPLATES, { keyPath: "id" });
+        templatesStore.createIndex("language_id", "language_id", { unique: false });
+        templatesStore.createIndex("name", "name", { unique: false });
       }
     };
   });
-}
+};
 
 // Generic function to get all items from a store
 async function getAllFromStore<T>(storeName: string): Promise<T[]> {
@@ -1149,6 +1161,169 @@ export async function clearNewsArticles(): Promise<void> {
       reject(new Error('Failed to clear news articles'));
     };
     
+    request.onsuccess = () => {
+      resolve();
+    };
+  });
+}
+
+// Add new functions for training planner
+export async function saveDailyTraining(training: DailyTraining): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    try {
+      // Check if the store exists
+      if (!db.objectStoreNames.contains("dailyTraining")) {
+        throw new Error("dailyTraining store does not exist");
+      }
+
+      const transaction = db.transaction(["dailyTraining"], 'readwrite');
+      const store = transaction.objectStore("dailyTraining");
+      
+      // Add an id to the training data
+      const trainingWithId = {
+        ...training,
+        id: `${training.language_id}_${training.date}` // Create a unique id
+      };
+      
+      const request = store.put(trainingWithId);
+      
+      request.onsuccess = () => {
+        console.log("Training plan saved successfully");
+        resolve();
+      };
+      
+      request.onerror = () => {
+        console.error("Error saving training plan:", request.error);
+        reject(request.error);
+      };
+    } catch (error) {
+      console.error("Error in saveDailyTraining:", error);
+      reject(error);
+    }
+  });
+}
+
+export async function getDailyTraining(languageId: string, date: string): Promise<DailyTraining | null> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    try {
+      if (!db.objectStoreNames.contains("dailyTraining")) {
+        throw new Error("dailyTraining store does not exist");
+      }
+
+      const transaction = db.transaction(["dailyTraining"], 'readonly');
+      const store = transaction.objectStore("dailyTraining");
+      
+      const id = `${languageId}_${date}`;
+      const request = store.get(id);
+      
+      request.onsuccess = () => {
+        const result = request.result;
+        if (result) {
+          // Remove the id before returning
+          const { id, ...training } = result;
+          resolve(training);
+        } else {
+          resolve(null);
+        }
+      };
+      
+      request.onerror = () => {
+        console.error("Error getting training plan:", request.error);
+        reject(request.error);
+      };
+    } catch (error) {
+      console.error("Error in getDailyTraining:", error);
+      reject(error);
+    }
+  });
+}
+
+export async function getTrainingHistory(languageId: string): Promise<DailyTraining[]> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    try {
+      if (!db.objectStoreNames.contains("dailyTraining")) {
+        throw new Error("dailyTraining store does not exist");
+      }
+
+      const transaction = db.transaction(["dailyTraining"], 'readonly');
+      const store = transaction.objectStore("dailyTraining");
+      
+      const index = store.index("language_id");
+      const request = index.getAll(languageId);
+      
+      request.onsuccess = () => {
+        const results = request.result.map(({ id, ...training }) => training);
+        resolve(results);
+      };
+      
+      request.onerror = () => {
+        console.error("Error getting training history:", request.error);
+        reject(request.error);
+      };
+    } catch (error) {
+      console.error("Error in getTrainingHistory:", error);
+      reject(error);
+    }
+  });
+}
+
+// Training template functions
+export async function saveTrainingTemplate(template: Omit<TrainingTemplate, "id" | "created_at">): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.TRAINING_TEMPLATES, 'readwrite');
+    const store = transaction.objectStore(STORES.TRAINING_TEMPLATES);
+    
+    const templateWithId = {
+      ...template,
+      id: `${template.language_id}_${template.name}_${Date.now()}`,
+      created_at: new Date().toISOString()
+    };
+    
+    const request = store.add(templateWithId);
+    
+    request.onerror = () => {
+      reject(new Error('Failed to save training template'));
+    };
+    
+    request.onsuccess = () => {
+      resolve();
+    };
+  });
+}
+
+export async function getTrainingTemplates(languageId: string): Promise<TrainingTemplate[]> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.TRAINING_TEMPLATES, 'readonly');
+    const store = transaction.objectStore(STORES.TRAINING_TEMPLATES);
+    const index = store.index("language_id");
+    const request = index.getAll(languageId);
+
+    request.onerror = () => {
+      reject(new Error('Failed to get training templates'));
+    };
+
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+  });
+}
+
+export async function deleteTrainingTemplate(templateId: string): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.TRAINING_TEMPLATES, 'readwrite');
+    const store = transaction.objectStore(STORES.TRAINING_TEMPLATES);
+    const request = store.delete(templateId);
+
+    request.onerror = () => {
+      reject(new Error('Failed to delete training template'));
+    };
+
     request.onsuccess = () => {
       resolve();
     };

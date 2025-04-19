@@ -21,6 +21,8 @@ import {
   type GrammarExercise
 } from "@/lib/services/indexedDBService";
 import { VocabularyVisualization } from '@/components/VocabularyVisualization';
+import { LanguageTrainingTracker } from '@/components/LanguageTrainingTracker';
+import { LanguageTrainingPlanner } from '@/components/LanguageTrainingPlanner';
 
 // Fallback data in case IndexedDB fails
 const FALLBACK_LANGUAGES: Language[] = [
@@ -46,36 +48,36 @@ const FALLBACK_LEVELS: ProficiencyLevel[] = [
 const SAMPLE_VOCABULARY: Record<string, Record<string, VocabularyItem[]>> = {
   'en': {
     'beginner': [
-      { id: 1, language_id: 'en', word: 'Hello', translation: 'Hello', example: 'Hello, how are you?', difficulty: 'beginner' },
-      { id: 2, language_id: 'en', word: 'Goodbye', translation: 'Goodbye', example: 'Goodbye, see you tomorrow!', difficulty: 'beginner' },
-      { id: 3, language_id: 'en', word: 'Thank you', translation: 'Thank you', example: 'Thank you for your help.', difficulty: 'beginner' },
-      { id: 4, language_id: 'en', word: 'Please', translation: 'Please', example: 'Please pass me the salt.', difficulty: 'beginner' },
-      { id: 5, language_id: 'en', word: 'Yes', translation: 'Yes', example: 'Yes, I understand.', difficulty: 'beginner' },
+      { id: 1, source_language_id: 'en', target_language_id: 'es', word: 'Hello', translation: 'Hola', example: 'Hello, how are you?', context: 'greeting', difficulty: 'beginner' },
+      { id: 2, source_language_id: 'en', target_language_id: 'es', word: 'Goodbye', translation: 'Adiós', example: 'Goodbye, see you tomorrow!', context: 'farewell', difficulty: 'beginner' },
+      { id: 3, source_language_id: 'en', target_language_id: 'es', word: 'Thank you', translation: 'Gracias', example: 'Thank you for your help.', context: 'gratitude', difficulty: 'beginner' },
+      { id: 4, source_language_id: 'en', target_language_id: 'es', word: 'Please', translation: 'Por favor', example: 'Please pass me the salt.', context: 'request', difficulty: 'beginner' },
+      { id: 5, source_language_id: 'en', target_language_id: 'es', word: 'Yes', translation: 'Sí', example: 'Yes, I understand.', context: 'affirmation', difficulty: 'beginner' },
     ],
     'intermediate': [
-      { id: 6, language_id: 'en', word: 'Nevertheless', translation: 'Nevertheless', example: 'Nevertheless, I will try again.', difficulty: 'intermediate' },
-      { id: 7, language_id: 'en', word: 'Furthermore', translation: 'Furthermore', example: 'Furthermore, we need to consider other options.', difficulty: 'intermediate' },
-      { id: 8, language_id: 'en', word: 'Consequently', translation: 'Consequently', example: 'Consequently, the project was delayed.', difficulty: 'intermediate' },
+      { id: 6, source_language_id: 'en', target_language_id: 'es', word: 'Nevertheless', translation: 'Sin embargo', example: 'Nevertheless, I will try again.', context: 'contrast', difficulty: 'intermediate' },
+      { id: 7, source_language_id: 'en', target_language_id: 'es', word: 'Furthermore', translation: 'Además', example: 'Furthermore, we need to consider other options.', context: 'addition', difficulty: 'intermediate' },
+      { id: 8, source_language_id: 'en', target_language_id: 'es', word: 'Consequently', translation: 'En consecuencia', example: 'Consequently, the project was delayed.', context: 'result', difficulty: 'intermediate' },
     ],
     'advanced': [
-      { id: 9, language_id: 'en', word: 'Ubiquitous', translation: 'Ubiquitous', example: 'Smartphones are now ubiquitous in modern society.', difficulty: 'advanced' },
-      { id: 10, language_id: 'en', word: 'Pragmatic', translation: 'Pragmatic', example: 'We need a pragmatic approach to solve this problem.', difficulty: 'advanced' },
+      { id: 9, source_language_id: 'en', target_language_id: 'es', word: 'Ubiquitous', translation: 'Ubicuo', example: 'Smartphones are now ubiquitous in modern society.', context: 'technology', difficulty: 'advanced' },
+      { id: 10, source_language_id: 'en', target_language_id: 'es', word: 'Pragmatic', translation: 'Pragmático', example: 'We need a pragmatic approach to solve this problem.', context: 'problem-solving', difficulty: 'advanced' },
     ],
   },
   'es': {
     'beginner': [
-      { id: 11, language_id: 'es', word: 'Hola', translation: 'Hello', example: '¡Hola! ¿Cómo estás?', difficulty: 'beginner' },
-      { id: 12, language_id: 'es', word: 'Adiós', translation: 'Goodbye', example: 'Adiós, ¡hasta mañana!', difficulty: 'beginner' },
-      { id: 13, language_id: 'es', word: 'Gracias', translation: 'Thank you', example: 'Gracias por tu ayuda.', difficulty: 'beginner' },
-      { id: 14, language_id: 'es', word: 'Por favor', translation: 'Please', example: 'Por favor, pásame la sal.', difficulty: 'beginner' },
-      { id: 15, language_id: 'es', word: 'Sí', translation: 'Yes', example: 'Sí, entiendo.', difficulty: 'beginner' },
+      { id: 11, source_language_id: 'es', target_language_id: 'en', word: 'Hola', translation: 'Hello', example: '¡Hola! ¿Cómo estás?', context: 'greeting', difficulty: 'beginner' },
+      { id: 12, source_language_id: 'es', target_language_id: 'en', word: 'Adiós', translation: 'Goodbye', example: 'Adiós, ¡hasta mañana!', context: 'farewell', difficulty: 'beginner' },
+      { id: 13, source_language_id: 'es', target_language_id: 'en', word: 'Gracias', translation: 'Thank you', example: 'Gracias por tu ayuda.', context: 'gratitude', difficulty: 'beginner' },
+      { id: 14, source_language_id: 'es', target_language_id: 'en', word: 'Por favor', translation: 'Please', example: 'Por favor, pásame la sal.', context: 'request', difficulty: 'beginner' },
+      { id: 15, source_language_id: 'es', target_language_id: 'en', word: 'Sí', translation: 'Yes', example: 'Sí, entiendo.', context: 'affirmation', difficulty: 'beginner' },
     ],
     'intermediate': [
-      { id: 16, language_id: 'es', word: 'Sin embargo', translation: 'However', example: 'Sin embargo, no estoy de acuerdo.', difficulty: 'intermediate' },
-      { id: 17, language_id: 'es', word: 'Además', translation: 'Moreover', example: 'Además, necesitamos considerar otras opciones.', difficulty: 'intermediate' },
+      { id: 16, source_language_id: 'es', target_language_id: 'en', word: 'Sin embargo', translation: 'However', example: 'Sin embargo, no estoy de acuerdo.', context: 'contrast', difficulty: 'intermediate' },
+      { id: 17, source_language_id: 'es', target_language_id: 'en', word: 'Además', translation: 'Moreover', example: 'Además, necesitamos considerar otras opciones.', context: 'addition', difficulty: 'intermediate' },
     ],
     'advanced': [
-      { id: 18, language_id: 'es', word: 'Ubicuo', translation: 'Ubiquitous', example: 'Los smartphones son ahora ubicuos en la sociedad moderna.', difficulty: 'advanced' },
+      { id: 18, source_language_id: 'es', target_language_id: 'en', word: 'Ubicuo', translation: 'Ubiquitous', example: 'Los smartphones son ahora ubicuos en la sociedad moderna.', context: 'technology', difficulty: 'advanced' },
     ],
   },
 };
@@ -96,14 +98,16 @@ const SAMPLE_GRAMMAR: Record<string, Record<string, GrammarSection[]>> = {
             section_id: 1,
             question: 'Complete the sentence: She ___ to school every day.',
             options: ['go', 'goes', 'going', 'went'],
-            correct: 1
+            correct: 1,
+            severity: 1
           },
           {
             id: 2,
             section_id: 1,
             question: 'Complete the sentence: They ___ English very well.',
             options: ['speak', 'speaks', 'speaking', 'spoke'],
-            correct: 0
+            correct: 0,
+            severity: 1
           }
         ]
       },
@@ -119,14 +123,16 @@ const SAMPLE_GRAMMAR: Record<string, Record<string, GrammarSection[]>> = {
             section_id: 2,
             question: 'Complete the sentence: I ___ to the cinema yesterday.',
             options: ['go', 'goes', 'going', 'went'],
-            correct: 3
+            correct: 3,
+            severity: 1
           },
           {
             id: 4,
             section_id: 2,
             question: 'Complete the sentence: She ___ her homework last night.',
             options: ['do', 'does', 'doing', 'did'],
-            correct: 3
+            correct: 3,
+            severity: 1
           }
         ]
       }
@@ -144,7 +150,8 @@ const SAMPLE_GRAMMAR: Record<string, Record<string, GrammarSection[]>> = {
             section_id: 3,
             question: 'Complete the sentence: I ___ never ___ to Paris.',
             options: ['have', 'has', 'had', 'having'],
-            correct: 0
+            correct: 0,
+            severity: 2
           }
         ]
       }
@@ -162,7 +169,8 @@ const SAMPLE_GRAMMAR: Record<string, Record<string, GrammarSection[]>> = {
             section_id: 4,
             question: 'Complete the sentence: If I ___ rich, I would travel the world.',
             options: ['am', 'was', 'were', 'be'],
-            correct: 2
+            correct: 2,
+            severity: 3
           }
         ]
       }
@@ -182,14 +190,16 @@ const SAMPLE_GRAMMAR: Record<string, Record<string, GrammarSection[]>> = {
             section_id: 5,
             question: 'Completa la frase: Ella ___ a la escuela todos los días.',
             options: ['va', 'vas', 'vamos', 'van'],
-            correct: 0
+            correct: 0,
+            severity: 1
           },
           {
             id: 8,
             section_id: 5,
             question: 'Completa la frase: Ellos ___ inglés muy bien.',
             options: ['hablan', 'habla', 'hablamos', 'habláis'],
-            correct: 0
+            correct: 0,
+            severity: 1
           }
         ]
       }
@@ -207,7 +217,8 @@ const SAMPLE_GRAMMAR: Record<string, Record<string, GrammarSection[]>> = {
             section_id: 6,
             question: 'Completa la frase: Yo ___ al cine ayer.',
             options: ['fui', 'fuiste', 'fue', 'fuimos'],
-            correct: 0
+            correct: 0,
+            severity: 2
           }
         ]
       }
@@ -216,10 +227,15 @@ const SAMPLE_GRAMMAR: Record<string, Record<string, GrammarSection[]>> = {
 };
 
 export default function LanguageLearningPage() {
-  const params = useParams();
+  const params = useParams<{ languageId: string }>();
   const router = useRouter();
-  const languageId = params.languageId as string;
+  const languageId = params.languageId;
   
+  if (!languageId) {
+    router.push('/language');
+    return null;
+  }
+
   const [languages, setLanguages] = useState<Language[]>([]);
   const [proficiencyLevels, setProficiencyLevels] = useState<ProficiencyLevel[]>([]);
   const [selectedLevel, setSelectedLevel] = useState("beginner");
@@ -454,18 +470,22 @@ export default function LanguageLearningPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <div className="flex items-center mb-6">
-        <Button 
-          variant="outline" 
-          className="mr-4"
-          onClick={() => router.push("/language")}
-        >
-          Back to Languages
-        </Button>
-        <div className="flex items-center">
-          <span className="text-3xl mr-2">{currentLanguage.flag}</span>
-          <h1 className="text-3xl font-bold">{currentLanguage.name} Learning</h1>
-        </div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">
+          {languages.find(l => l.id === languageId)?.name || 'Language Learning'}
+        </h1>
+        <Select value={selectedLevel} onValueChange={setSelectedLevel}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Select level" />
+          </SelectTrigger>
+          <SelectContent>
+            {proficiencyLevels.map((level) => (
+              <SelectItem key={level.id} value={level.id}>
+                {level.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       
       {error && (
@@ -474,35 +494,12 @@ export default function LanguageLearningPage() {
         </div>
       )}
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div>
-          <label className="block text-sm font-medium mb-2">Proficiency Level</label>
-          <Select value={selectedLevel} onValueChange={setSelectedLevel}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select your level" />
-            </SelectTrigger>
-            <SelectContent>
-              {proficiencyLevels.map((level) => (
-                <SelectItem key={level.id} value={level.id}>
-                  {level.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium mb-2">Your Progress</label>
-          <Progress value={progress} className="h-2" />
-          <p className="text-sm text-muted-foreground mt-1">{progress}% Complete</p>
-        </div>
-      </div>
-      
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3 mb-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList>
           <TabsTrigger value="vocabulary">Vocabulary</TabsTrigger>
           <TabsTrigger value="grammar">Grammar</TabsTrigger>
-          <TabsTrigger value="pronunciation">Pronunciation</TabsTrigger>
+          <TabsTrigger value="planner">Training Planner</TabsTrigger>
+          <TabsTrigger value="tracker">Progress Tracker</TabsTrigger>
         </TabsList>
         
         <TabsContent value="vocabulary">
@@ -677,24 +674,15 @@ export default function LanguageLearningPage() {
           )}
         </TabsContent>
         
-        <TabsContent value="pronunciation">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pronunciation Practice</CardTitle>
-              <CardDescription>
-                Practice your pronunciation with AI feedback
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-4">
-                This feature is coming soon! You'll be able to practice your pronunciation
-                and receive AI-powered feedback to improve your speaking skills.
-              </p>
-              <div className="flex items-center justify-center h-40 bg-muted rounded-md">
-                <p className="text-muted-foreground">Pronunciation practice module under development</p>
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value="planner">
+          <LanguageTrainingPlanner languageId={languageId} />
+        </TabsContent>
+        
+        <TabsContent value="tracker">
+          <LanguageTrainingTracker 
+            languageId={languageId} 
+            languageName={languages.find(l => l.id === languageId)?.name || 'Unknown Language'} 
+          />
         </TabsContent>
       </Tabs>
 
