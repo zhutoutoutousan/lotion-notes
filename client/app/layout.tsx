@@ -8,6 +8,7 @@ import Sidebar from "@/components/sidebar"
 import AIChatPanelWrapper from "@/components/ai-chat-panel-wrapper"
 import { TerminalProvider } from '@/contexts/TerminalContext'
 import TerminalWrapper from '@/components/TerminalWrapper'
+import { FloatingBook } from '../components/FloatingBook'
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -97,6 +98,7 @@ export default function RootLayout({
             </TerminalWrapper>
           </ThemeProvider>
         </TerminalProvider>
+        <FloatingBook />
       </body>
     </html>
   )
