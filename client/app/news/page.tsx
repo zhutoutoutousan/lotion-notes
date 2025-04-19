@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Globe, Languages, BookOpen, ArrowRight, Loader2, Newspaper, Search, Download, MapPin, Calendar, LayoutGrid } from "lucide-react";
+import { AlertCircle, Globe, Languages, BookOpen, ArrowRight, Loader2, Newspaper, Search, Download, MapPin, Calendar, LayoutGrid, Trash2 } from "lucide-react";
 import { 
   NewsArticle, 
   fetchNewsDataArticles, 
@@ -21,7 +21,13 @@ import {
   detectLocationWithDeepSeek,
   fetchAllNewsArticles
 } from "@/services/news-service";
-import { openDB, IDBPDatabase } from 'idb';
+import { 
+  initDB, 
+  STORES, 
+  saveNewsArticles, 
+  getNewsArticles, 
+  clearNewsArticles 
+} from "@/lib/services/indexedDBService";
 import dynamic from 'next/dynamic';
 import Image from "next/image";
 import NewsCard from '@/components/NewsCard';
@@ -141,6 +147,32 @@ function NewsPageContent() {
   // Debounce the search query
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
+  // Load saved articles from IndexedDB on mount and when view mode changes
+  useEffect(() => {
+    const loadSavedArticles = async () => {
+      try {
+        const savedArticles = await getNewsArticles();
+        if (savedArticles.length > 0 && viewMode === 'map') {
+          setArticles(savedArticles);
+          setFilteredArticles(savedArticles);
+        }
+      } catch (error) {
+        console.error('Error loading saved articles:', error);
+      }
+    };
+
+    loadSavedArticles();
+  }, []); // Remove viewMode from dependencies
+
+  // Save articles to IndexedDB when they change
+  useEffect(() => {
+    if (articles.length > 0) {
+      saveNewsArticles(articles).catch(error => {
+        console.error('Error saving articles:', error);
+      });
+    }
+  }, [articles]);
+
   // New function to detect locations for specific articles
   const detectLocationsForArticles = async (articlesToProcess: NewsArticle[]) => {
     setDetectingLocations(true);
@@ -249,22 +281,45 @@ function NewsPageContent() {
           // Only detect locations for new articles if autoDetectLocations is enabled
           if (mapSettings.autoDetectLocations && newArticles.length > 0) {
             await detectLocationsForArticles(newArticles);
+            // Save only articles with valid location data
+            const articlesWithValidLocations = combinedArticles.filter(article => 
+              article.location && 
+              typeof article.location.latitude === 'number' && 
+              typeof article.location.longitude === 'number' &&
+              !isNaN(article.location.latitude) &&
+              !isNaN(article.location.longitude)
+            );
+            if (articlesWithValidLocations.length > 0) {
+              await saveNewsArticles(articlesWithValidLocations);
+            }
           }
         } else {
-          // Replace articles if accumulation is disabled
+          // Replace existing articles with new ones
           setArticles(fetchedArticles);
           setFilteredArticles(fetchedArticles);
+          
           if (mapSettings.autoDetectLocations) {
             await detectLocationsForArticles(fetchedArticles);
+            // Save only articles with valid location data
+            const articlesWithValidLocations = fetchedArticles.filter(article => 
+              article.location && 
+              typeof article.location.latitude === 'number' && 
+              typeof article.location.longitude === 'number' &&
+              !isNaN(article.location.latitude) &&
+              !isNaN(article.location.longitude)
+            );
+            if (articlesWithValidLocations.length > 0) {
+              await saveNewsArticles(articlesWithValidLocations);
+            }
           }
         }
       } else {
         setArticles(fetchedArticles);
         setFilteredArticles(fetchedArticles);
       }
-    } catch (err) {
-      setError('Failed to fetch news articles');
-      console.error(err);
+    } catch (error) {
+      console.error('Error fetching articles:', error);
+      setError('Failed to fetch articles. Please try again.');
     } finally {
       setIsSearching(false);
     }
@@ -355,7 +410,7 @@ function NewsPageContent() {
   // Add exportVocabulary function
   const exportVocabulary = async (vocabulary: Array<{ word: string; translation: string; example: string }>, language: string) => {
     try {
-      const db = await openDB('lotionNotesDB', 1, {
+      const db = await openDB('language_learning', 1, {
         upgrade(db: IDBPDatabase) {
           if (!db.objectStoreNames.contains('vocabulary')) {
             db.createObjectStore('vocabulary', { keyPath: 'id', autoIncrement: true });
@@ -388,7 +443,43 @@ function NewsPageContent() {
   const handleViewModeChange = (mode: 'card' | 'map') => {
     setViewMode(mode);
     setIsFirstVisit(false);
-    // Remove automatic location detection when switching to map view
+    
+    // When switching to map view, load saved articles
+    if (mode === 'map') {
+      getNewsArticles()
+        .then(savedArticles => {
+          if (savedArticles.length > 0) {
+            setArticles(savedArticles);
+            setFilteredArticles(savedArticles);
+          }
+        })
+        .catch(error => {
+          console.error('Error loading saved articles:', error);
+        });
+    } else {
+      // Clear articles when switching to card view
+      setArticles([]);
+      setFilteredArticles([]);
+    }
+  };
+
+  // Add clear map function
+  const handleClearMap = async () => {
+    try {
+      // Clear IndexedDB data
+      await clearNewsArticles();
+      
+      // Clear state data
+      setArticles([]);
+      setFilteredArticles([]);
+      
+      // Show success message
+      setError('Map data cleared successfully');
+      setTimeout(() => setError(null), 3000);
+    } catch (error) {
+      console.error('Error clearing map:', error);
+      setError('Failed to clear map. Please try again.');
+    }
   };
 
   if (viewMode === 'welcome') {
@@ -543,11 +634,22 @@ function NewsPageContent() {
                         className="w-20 bg-gray-200 text-black"
                       />
                     </div>
-                    {mapSettings.showArticleCount && (
-                      <div className="ml-auto text-sm font-medium text-gray-800">
-                        Showing {articles.length} articles
-                      </div>
-                    )}
+                    <div className="flex items-center gap-4 ml-auto">
+                      <Button 
+                        variant="destructive" 
+                        onClick={handleClearMap}
+                        disabled={articles.length === 0}
+                        className="flex items-center gap-2"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span>Clear Map Data</span>
+                      </Button>
+                      {mapSettings.showArticleCount && (
+                        <div className="text-sm font-medium text-gray-800">
+                          Showing {articles.length} articles
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

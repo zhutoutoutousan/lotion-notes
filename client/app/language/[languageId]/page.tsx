@@ -20,6 +20,7 @@ import {
   type GrammarSection,
   type GrammarExercise
 } from "@/lib/services/indexedDBService";
+import { VocabularyVisualization } from '@/components/VocabularyVisualization';
 
 // Fallback data in case IndexedDB fails
 const FALLBACK_LANGUAGES: Language[] = [
@@ -304,7 +305,7 @@ export default function LanguageLearningPage() {
       try {
         // Try to load from IndexedDB first
         const [vocabularyData, grammarData] = await Promise.all([
-          getVocabulary(languageId, selectedLevel),
+          getVocabulary(languageId, 'en', selectedLevel),
           getGrammarSections(languageId, selectedLevel)
         ]);
         
@@ -696,6 +697,14 @@ export default function LanguageLearningPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <div className="mt-8">
+        <h2 className="text-2xl font-semibold mb-4">Vocabulary Visualization</h2>
+        <VocabularyVisualization 
+          sourceLanguageId={params.languageId}
+          targetLanguageId="en" // Assuming English as the target language for now
+        />
+      </div>
     </div>
   );
 } 

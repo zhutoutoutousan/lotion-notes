@@ -1,17 +1,22 @@
 // IndexedDB service for language learning
 
 // Database name and version
-const DB_NAME = 'lotionNotesDB';
-const DB_VERSION = 1;
+const DB_NAME = "language_learning";
+const DB_VERSION = 4;
 
 // Store names
-const STORES = {
+export const STORES = {
   LANGUAGES: 'languages',
   PROFICIENCY_LEVELS: 'proficiencyLevels',
   VOCABULARY: 'vocabulary',
   GRAMMAR_SECTIONS: 'grammarSections',
   GRAMMAR_EXERCISES: 'grammarExercises',
-  USER_PROGRESS: 'userProgress'
+  USER_PROGRESS: 'userProgress',
+  LIFE_STAGES: 'lifeStages',
+  LIFE_PROGRESS: 'lifeProgress',
+  HEALTH_REMINDERS: 'healthReminders',
+  HEALTH_CHECKUPS: 'healthCheckups',
+  NEWS_ARTICLES: 'newsArticles'
 };
 
 // Types
@@ -28,10 +33,12 @@ export interface ProficiencyLevel {
 
 export interface VocabularyItem {
   id: number;
-  language_id: string;
+  source_language_id: string;
+  target_language_id: string;
   word: string;
   translation: string;
-  example: string | null;
+  example: string;
+  context: string;
   difficulty: string;
 }
 
@@ -50,6 +57,7 @@ export interface GrammarExercise {
   question: string;
   options: string[];
   correct: number;
+  severity: number;
 }
 
 export interface UserLanguageProgress {
@@ -60,6 +68,82 @@ export interface UserLanguageProgress {
   vocabulary_progress: number;
   grammar_progress: number;
   pronunciation_progress: number;
+}
+
+export interface LifeStage {
+  id: number;
+  name: string;
+  age_range: string;
+  description: string;
+  social_goals: string[];
+  economic_goals: string[];
+  emotional_goals: string[];
+  milestones: string[];
+}
+
+export interface LifeProgress {
+  id: number;
+  user_id: string;
+  stage_id: number;
+  social_score: number;
+  economic_score: number;
+  emotional_score: number;
+  completed_milestones: number[];
+  notes: string;
+  last_updated: Date;
+}
+
+export interface HealthReminder {
+  id: number;
+  user_id: string;
+  type: 'dental' | 'medical' | 'fitness' | 'mental';
+  title: string;
+  description: string;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  last_completed: Date | null;
+  next_due: Date;
+  is_active: boolean;
+}
+
+export interface HealthCheckup {
+  id: number;
+  user_id: string;
+  type: string;
+  date: Date;
+  notes: string;
+  results: string;
+  next_due: Date;
+}
+
+export interface NewsArticle {
+  article_id: string;
+  title: string;
+  description: string;
+  content: string;
+  url: string;
+  image_url: string;
+  published_at: string;
+  source: string;
+  category: string;
+  language: string;
+  country: string;
+  location?: {
+    name: string;
+    latitude: number;
+    longitude: number;
+    reasoning?: {
+      analysis: string;
+      creative_connection: string;
+      metaphor: string;
+      confidence: "high" | "medium" | "low";
+      alternative_locations: Array<{
+        name: string;
+        latitude: number;
+        longitude: number;
+        relevance: string;
+      }>;
+    };
+  };
 }
 
 // Initialize the database
@@ -102,9 +186,10 @@ export async function initDB(): Promise<IDBDatabase> {
       if (!existingStores.includes(STORES.VOCABULARY)) {
         console.log("Creating vocabulary store");
         const vocabularyStore = db.createObjectStore(STORES.VOCABULARY, { keyPath: "id", autoIncrement: true });
-        vocabularyStore.createIndex("language_id", "language_id", { unique: false });
+        vocabularyStore.createIndex("source_language_id", "source_language_id", { unique: false });
+        vocabularyStore.createIndex("target_language_id", "target_language_id", { unique: false });
         vocabularyStore.createIndex("difficulty", "difficulty", { unique: false });
-        vocabularyStore.createIndex("language_difficulty", ["language_id", "difficulty"], { unique: false });
+        vocabularyStore.createIndex("language_pair_difficulty", ["source_language_id", "target_language_id", "difficulty"], { unique: false });
       }
       
       if (!existingStores.includes(STORES.GRAMMAR_SECTIONS)) {
@@ -127,6 +212,38 @@ export async function initDB(): Promise<IDBDatabase> {
         userProgressStore.createIndex("user_id", "user_id", { unique: false });
         userProgressStore.createIndex("language_id", "language_id", { unique: false });
         userProgressStore.createIndex("user_language", ["user_id", "language_id"], { unique: true });
+      }
+
+      // Create new stores for life guide and health
+      if (!existingStores.includes(STORES.LIFE_STAGES)) {
+        console.log("Creating life stages store");
+        db.createObjectStore(STORES.LIFE_STAGES, { keyPath: 'id' });
+      }
+      if (!existingStores.includes(STORES.LIFE_PROGRESS)) {
+        console.log("Creating life progress store");
+        const lifeProgressStore = db.createObjectStore(STORES.LIFE_PROGRESS, { keyPath: 'id' });
+        lifeProgressStore.createIndex('user_stage', ['user_id', 'stage_id'], { unique: true });
+      }
+      if (!existingStores.includes(STORES.HEALTH_REMINDERS)) {
+        console.log("Creating health reminders store");
+        const healthRemindersStore = db.createObjectStore(STORES.HEALTH_REMINDERS, { keyPath: 'id' });
+        healthRemindersStore.createIndex('user_type', ['user_id', 'type'], { unique: false });
+        healthRemindersStore.createIndex('next_due', 'next_due', { unique: false });
+      }
+      if (!existingStores.includes(STORES.HEALTH_CHECKUPS)) {
+        console.log("Creating health checkups store");
+        const healthCheckupsStore = db.createObjectStore(STORES.HEALTH_CHECKUPS, { keyPath: 'id' });
+        healthCheckupsStore.createIndex('user_type', ['user_id', 'type'], { unique: false });
+        healthCheckupsStore.createIndex('date', 'date', { unique: false });
+      }
+
+      if (!existingStores.includes(STORES.NEWS_ARTICLES)) {
+        console.log("Creating news articles store");
+        const newsStore = db.createObjectStore(STORES.NEWS_ARTICLES, { keyPath: 'article_id' });
+        newsStore.createIndex('category', 'category', { unique: false });
+        newsStore.createIndex('language', 'language', { unique: false });
+        newsStore.createIndex('country', 'country', { unique: false });
+        newsStore.createIndex('published_at', 'published_at', { unique: false });
       }
     };
   });
@@ -240,20 +357,41 @@ export async function getProficiencyLevels(): Promise<ProficiencyLevel[]> {
   return getAllFromStore<ProficiencyLevel>(STORES.PROFICIENCY_LEVELS);
 }
 
-// Get vocabulary for a specific language and difficulty
+// Get vocabulary for a specific language pair and difficulty
 export async function getVocabulary(
-  languageId: string, 
+  sourceLanguageId: string,
+  targetLanguageId: string,
   difficulty: string
 ): Promise<VocabularyItem[]> {
-  // First get all vocabulary for the language
-  const allVocabulary = await getItemsByIndex<VocabularyItem>(
-    STORES.VOCABULARY, 
-    'language_id', 
-    languageId
-  );
-  
-  // Then filter by difficulty
-  return allVocabulary.filter(item => item.difficulty === difficulty);
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.VOCABULARY, "readonly");
+    const store = transaction.objectStore(STORES.VOCABULARY);
+    const index = store.index("language_pair_difficulty");
+    
+    // Ensure all values are strings and not null/undefined
+    if (!sourceLanguageId || !targetLanguageId || !difficulty) {
+      reject(new Error("Invalid parameters: sourceLanguageId, targetLanguageId, and difficulty must be non-empty strings"));
+      return;
+    }
+
+    // Create a key range for the compound index with valid key types
+    const keyRange = IDBKeyRange.only([
+      String(sourceLanguageId),
+      String(targetLanguageId),
+      String(difficulty)
+    ]);
+    
+    const request = index.getAll(keyRange);
+
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+
+    request.onerror = () => {
+      reject(new Error("Failed to get vocabulary items"));
+    };
+  });
 }
 
 // Get grammar sections for a specific language and difficulty
@@ -385,57 +523,231 @@ export async function initializeSampleData(): Promise<void> {
     
     if (languages.length === 0) {
       console.log("Initializing sample languages");
-      // Add sample languages
-      const sampleLanguages: Language[] = [
-        { id: 'en', name: 'English', flag: '🇬🇧' },
-        { id: 'es', name: 'Spanish', flag: '🇪🇸' },
-        { id: 'pt', name: 'Portuguese', flag: '🇵🇹' },
-        { id: 'de', name: 'German', flag: '🇩🇪' },
-        { id: 'fr', name: 'French', flag: '🇫🇷' },
-        { id: 'ja', name: 'Japanese', flag: '🇯🇵' },
-        { id: 'ru', name: 'Russian', flag: '🇷🇺' },
-        { id: 'hi', name: 'Hindi', flag: '🇮🇳' },
-        { id: 'ko', name: 'Korean', flag: '🇰🇷' },
-        { id: 'zh', name: 'Chinese', flag: '🇨🇳' },
-      ];
+      try {
+        // Add sample languages
+        const sampleLanguages: Language[] = [
+          { id: 'en', name: 'English', flag: '🇬🇧' },
+          { id: 'es', name: 'Spanish', flag: '🇪🇸' },
+          { id: 'pt', name: 'Portuguese', flag: '🇵🇹' },
+          { id: 'de', name: 'German', flag: '🇩🇪' },
+          { id: 'fr', name: 'French', flag: '🇫🇷' },
+          { id: 'ja', name: 'Japanese', flag: '🇯🇵' },
+          { id: 'ru', name: 'Russian', flag: '🇷🇺' },
+          { id: 'hi', name: 'Hindi', flag: '🇮🇳' },
+          { id: 'ko', name: 'Korean', flag: '🇰🇷' },
+          { id: 'zh', name: 'Chinese', flag: '🇨🇳' },
+        ];
+        
+        await addItemsToStore(STORES.LANGUAGES, sampleLanguages);
+        console.log("Successfully added sample languages");
+      } catch (error) {
+        console.error("Error adding languages:", error);
+        throw error;
+      }
       
-      await addItemsToStore(STORES.LANGUAGES, sampleLanguages);
-      
-      // Add sample proficiency levels
-      const sampleLevels: ProficiencyLevel[] = [
-        { id: 'beginner', name: 'Beginner' },
-        { id: 'intermediate', name: 'Intermediate' },
-        { id: 'advanced', name: 'Advanced' },
-      ];
-      
-      await addItemsToStore(STORES.PROFICIENCY_LEVELS, sampleLevels);
+      try {
+        // Add sample proficiency levels
+        const sampleLevels: ProficiencyLevel[] = [
+          { id: 'beginner', name: 'Beginner' },
+          { id: 'intermediate', name: 'Intermediate' },
+          { id: 'advanced', name: 'Advanced' },
+        ];
+        
+        await addItemsToStore(STORES.PROFICIENCY_LEVELS, sampleLevels);
+        console.log("Successfully added proficiency levels");
+      } catch (error) {
+        console.error("Error adding proficiency levels:", error);
+        throw error;
+      }
       
       // Add sample vocabulary for English
-      const englishVocabulary: VocabularyItem[] = [
-        { language_id: 'en', word: 'Hello', translation: 'Hello', example: 'Hello, how are you?', difficulty: 'beginner' },
-        { language_id: 'en', word: 'Goodbye', translation: 'Goodbye', example: 'Goodbye, see you tomorrow!', difficulty: 'beginner' },
-        { language_id: 'en', word: 'Thank you', translation: 'Thank you', example: 'Thank you for your help.', difficulty: 'beginner' },
-        { language_id: 'en', word: 'Please', translation: 'Please', example: 'Please pass me the salt.', difficulty: 'beginner' },
-        { language_id: 'en', word: 'Yes', translation: 'Yes', example: 'Yes, I understand.', difficulty: 'beginner' },
-        { language_id: 'en', word: 'Nevertheless', translation: 'Nevertheless', example: 'Nevertheless, I will try again.', difficulty: 'intermediate' },
-        { language_id: 'en', word: 'Furthermore', translation: 'Furthermore', example: 'Furthermore, we need to consider other options.', difficulty: 'intermediate' },
-        { language_id: 'en', word: 'Consequently', translation: 'Consequently', example: 'Consequently, the project was delayed.', difficulty: 'intermediate' },
-        { language_id: 'en', word: 'Ubiquitous', translation: 'Ubiquitous', example: 'Smartphones are now ubiquitous in modern society.', difficulty: 'advanced' },
-        { language_id: 'en', word: 'Pragmatic', translation: 'Pragmatic', example: 'We need a pragmatic approach to solve this problem.', difficulty: 'advanced' },
+      const sampleVocabulary: VocabularyItem[] = [
+        {
+          id: 1,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'Hello',
+          translation: 'Hola',
+          example: 'Hello, how are you?',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 2,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'Goodbye',
+          translation: 'Adiós',
+          example: 'Goodbye, see you tomorrow!',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 3,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'Thank you',
+          translation: 'Gracias',
+          example: 'Thank you for your help',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 4,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'Please',
+          translation: 'Por favor',
+          example: 'Please pass the salt',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 5,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'Sorry',
+          translation: 'Lo siento',
+          example: 'I am sorry for being late',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 6,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'Yes',
+          translation: 'Sí',
+          example: 'Yes, I understand',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 7,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'No',
+          translation: 'No',
+          example: 'No, I don\'t want to go',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 8,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'Maybe',
+          translation: 'Quizás',
+          example: 'Maybe we can meet tomorrow',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 9,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'Help',
+          translation: 'Ayuda',
+          example: 'I need help with this problem',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 10,
+          source_language_id: 'en',
+          target_language_id: 'es',
+          word: 'Water',
+          translation: 'Agua',
+          example: 'Can I have some water, please?',
+          context: '',
+          difficulty: 'beginner'
+        }
       ];
       
-      await addItemsToStore(STORES.VOCABULARY, englishVocabulary);
+      await addItemsToStore(STORES.VOCABULARY, sampleVocabulary);
       
       // Add sample vocabulary for Spanish
       const spanishVocabulary: VocabularyItem[] = [
-        { language_id: 'es', word: 'Hola', translation: 'Hello', example: '¡Hola! ¿Cómo estás?', difficulty: 'beginner' },
-        { language_id: 'es', word: 'Adiós', translation: 'Goodbye', example: 'Adiós, ¡hasta mañana!', difficulty: 'beginner' },
-        { language_id: 'es', word: 'Gracias', translation: 'Thank you', example: 'Gracias por tu ayuda.', difficulty: 'beginner' },
-        { language_id: 'es', word: 'Por favor', translation: 'Please', example: 'Por favor, pásame la sal.', difficulty: 'beginner' },
-        { language_id: 'es', word: 'Sí', translation: 'Yes', example: 'Sí, entiendo.', difficulty: 'beginner' },
-        { language_id: 'es', word: 'Sin embargo', translation: 'However', example: 'Sin embargo, no estoy de acuerdo.', difficulty: 'intermediate' },
-        { language_id: 'es', word: 'Además', translation: 'Moreover', example: 'Además, necesitamos considerar otras opciones.', difficulty: 'intermediate' },
-        { language_id: 'es', word: 'Ubicuo', translation: 'Ubiquitous', example: 'Los smartphones son ahora ubicuos en la sociedad moderna.', difficulty: 'advanced' },
+        {
+          id: 11,
+          source_language_id: 'es',
+          target_language_id: 'en',
+          word: 'Hola',
+          translation: 'Hello',
+          example: 'Hola, ¿cómo estás?',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 12,
+          source_language_id: 'es',
+          target_language_id: 'en',
+          word: 'Adiós',
+          translation: 'Goodbye',
+          example: 'Adiós, hasta mañana',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 13,
+          source_language_id: 'es',
+          target_language_id: 'en',
+          word: 'Gracias',
+          translation: 'Thank you',
+          example: 'Gracias por tu ayuda',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 14,
+          source_language_id: 'es',
+          target_language_id: 'en',
+          word: 'Por favor',
+          translation: 'Please',
+          example: 'Por favor, pásame la sal',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 15,
+          source_language_id: 'es',
+          target_language_id: 'en',
+          word: 'Lo siento',
+          translation: 'Sorry',
+          example: 'Lo siento por llegar tarde',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 16,
+          source_language_id: 'es',
+          target_language_id: 'en',
+          word: 'Sí',
+          translation: 'Yes',
+          example: 'Sí, entiendo',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 17,
+          source_language_id: 'es',
+          target_language_id: 'en',
+          word: 'No',
+          translation: 'No',
+          example: 'No, no quiero ir',
+          context: '',
+          difficulty: 'beginner'
+        },
+        {
+          id: 18,
+          source_language_id: 'es',
+          target_language_id: 'en',
+          word: 'Quizás',
+          translation: 'Maybe',
+          example: 'Quizás nos vemos mañana',
+          context: '',
+          difficulty: 'beginner'
+        }
       ];
       
       await addItemsToStore(STORES.VOCABULARY, spanishVocabulary);
@@ -443,17 +755,24 @@ export async function initializeSampleData(): Promise<void> {
       // Add sample grammar sections for English
       const englishGrammarSections: GrammarSection[] = [
         {
+          id: 3,
           language_id: 'en',
           title: 'Present Simple',
           description: 'Learn how to use the present simple tense',
           difficulty: 'beginner',
           exercises: [
             {
+              id: 19,
+              section_id: 3,
+              severity: 1,
               question: 'Complete the sentence: She ___ to school every day.',
               options: ['go', 'goes', 'going', 'went'],
               correct: 1
             },
             {
+              id: 20,
+              section_id: 3,
+              severity: 1,
               question: 'Complete the sentence: They ___ English very well.',
               options: ['speak', 'speaks', 'speaking', 'spoke'],
               correct: 0
@@ -461,17 +780,24 @@ export async function initializeSampleData(): Promise<void> {
           ]
         },
         {
+          id: 4,
           language_id: 'en',
           title: 'Past Simple',
           description: 'Learn how to use the past simple tense',
           difficulty: 'beginner',
           exercises: [
             {
+              id: 21,
+              section_id: 4,
+              severity: 1,
               question: 'Complete the sentence: I ___ to the cinema yesterday.',
               options: ['go', 'goes', 'going', 'went'],
               correct: 3
             },
             {
+              id: 22,
+              section_id: 4,
+              severity: 1,
               question: 'Complete the sentence: She ___ her homework last night.',
               options: ['do', 'does', 'doing', 'did'],
               correct: 3
@@ -479,12 +805,16 @@ export async function initializeSampleData(): Promise<void> {
           ]
         },
         {
+          id: 5,
           language_id: 'en',
           title: 'Present Perfect',
           description: 'Learn how to use the present perfect tense',
           difficulty: 'intermediate',
           exercises: [
             {
+              id: 23,
+              section_id: 5,
+              severity: 1,
               question: 'Complete the sentence: I ___ never ___ to Paris.',
               options: ['have', 'has', 'had', 'having'],
               correct: 0
@@ -492,12 +822,16 @@ export async function initializeSampleData(): Promise<void> {
           ]
         },
         {
+          id: 6,
           language_id: 'en',
           title: 'Conditionals',
           description: 'Learn how to use conditional sentences',
           difficulty: 'advanced',
           exercises: [
             {
+              id: 24,
+              section_id: 6,
+              severity: 1,
               question: 'Complete the sentence: If I ___ rich, I would travel the world.',
               options: ['am', 'was', 'were', 'be'],
               correct: 2
@@ -517,17 +851,24 @@ export async function initializeSampleData(): Promise<void> {
       // Add sample grammar sections for Spanish
       const spanishGrammarSections: GrammarSection[] = [
         {
+          id: 7,
           language_id: 'es',
           title: 'Presente Simple',
           description: 'Aprende a usar el presente simple',
           difficulty: 'beginner',
           exercises: [
             {
+              id: 25,
+              section_id: 7,
+              severity: 1,
               question: 'Completa la frase: Ella ___ a la escuela todos los días.',
               options: ['va', 'vas', 'vamos', 'van'],
               correct: 0
             },
             {
+              id: 26,
+              section_id: 7,
+              severity: 1,
               question: 'Completa la frase: Ellos ___ inglés muy bien.',
               options: ['hablan', 'habla', 'hablamos', 'habláis'],
               correct: 0
@@ -535,12 +876,16 @@ export async function initializeSampleData(): Promise<void> {
           ]
         },
         {
+          id: 8,
           language_id: 'es',
           title: 'Pretérito Indefinido',
           description: 'Aprende a usar el pretérito indefinido',
           difficulty: 'intermediate',
           exercises: [
             {
+              id: 27,
+              section_id: 8,
+              severity: 1,
               question: 'Completa la frase: Yo ___ al cine ayer.',
               options: ['fui', 'fuiste', 'fue', 'fuimos'],
               correct: 0
@@ -557,12 +902,255 @@ export async function initializeSampleData(): Promise<void> {
         }
       }
       
+      // Add sample grammar exercises
+      const grammarExercises: GrammarExercise[] = [
+        {
+          id: 10,
+          section_id: 2,
+          severity: 1,
+          question: 'Which is the correct form of "to be" in past tense?',
+          options: ['era', 'estaba', 'tenía', 'había'],
+          correct: 0
+        },
+        {
+          id: 11,
+          section_id: 2,
+          severity: 1,
+          question: 'What is the correct form of "to have" in past tense?',
+          options: ['era', 'estaba', 'tenía', 'había'],
+          correct: 2
+        },
+        {
+          id: 12,
+          section_id: 2,
+          severity: 1,
+          question: 'Which verb means "to go" in past tense?',
+          options: ['iba', 'venía', 'salía', 'entraba'],
+          correct: 0
+        },
+        {
+          id: 13,
+          section_id: 2,
+          severity: 1,
+          question: 'What is the correct form of "to do/make" in past tense?',
+          options: ['hacía', 'decía', 'ponía', 'traía'],
+          correct: 0
+        },
+        {
+          id: 14,
+          section_id: 2,
+          severity: 1,
+          question: 'Which verb means "to want" in past tense?',
+          options: ['quería', 'podía', 'sabía', 'conocía'],
+          correct: 0
+        },
+        {
+          id: 15,
+          section_id: 2,
+          severity: 1,
+          question: 'What is the correct form of "to know" in past tense?',
+          options: ['sabía', 'conocía', 'entendía', 'aprendía'],
+          correct: 0
+        },
+        {
+          id: 16,
+          section_id: 2,
+          severity: 1,
+          question: 'Which verb means "to be able to" in past tense?',
+          options: ['podía', 'quería', 'necesitaba', 'debía'],
+          correct: 0
+        },
+        {
+          id: 17,
+          section_id: 2,
+          severity: 1,
+          question: 'What is the correct form of "to need" in past tense?',
+          options: ['necesitaba', 'debía', 'tenía que', 'podía'],
+          correct: 0
+        },
+        {
+          id: 18,
+          section_id: 2,
+          severity: 1,
+          question: 'Which verb means "to have to" in past tense?',
+          options: ['tenía que', 'debía', 'necesitaba', 'podía'],
+          correct: 0
+        }
+      ];
+      
+      for (const exercise of grammarExercises) {
+        await addItemsToStore(STORES.GRAMMAR_EXERCISES, [exercise]);
+      }
+      
+      // Add more grammar exercises
+      const moreGrammarExercises: GrammarExercise[] = [
+        {
+          id: 10,
+          section_id: 1,
+          severity: 1,
+          question: 'Which is the correct form of "to be" in present tense?',
+          options: ['ser', 'estar', 'tener', 'haber'],
+          correct: 0
+        },
+        {
+          id: 11,
+          section_id: 1,
+          severity: 1,
+          question: 'What is the correct form of "to have" in present tense?',
+          options: ['ser', 'estar', 'tener', 'haber'],
+          correct: 2
+        },
+        {
+          id: 12,
+          section_id: 1,
+          severity: 1,
+          question: 'Which verb means "to go"?',
+          options: ['ir', 'venir', 'salir', 'entrar'],
+          correct: 0
+        },
+        {
+          id: 13,
+          section_id: 1,
+          severity: 1,
+          question: 'What is the correct form of "to do/make"?',
+          options: ['hacer', 'decir', 'poner', 'traer'],
+          correct: 0
+        },
+        {
+          id: 14,
+          section_id: 1,
+          severity: 1,
+          question: 'Which verb means "to want"?',
+          options: ['querer', 'poder', 'saber', 'conocer'],
+          correct: 0
+        },
+        {
+          id: 15,
+          section_id: 1,
+          severity: 1,
+          question: 'What is the correct form of "to know"?',
+          options: ['saber', 'conocer', 'entender', 'aprender'],
+          correct: 0
+        },
+        {
+          id: 16,
+          section_id: 1,
+          severity: 1,
+          question: 'Which verb means "to be able to"?',
+          options: ['poder', 'querer', 'necesitar', 'deber'],
+          correct: 0
+        },
+        {
+          id: 17,
+          section_id: 1,
+          severity: 1,
+          question: 'What is the correct form of "to need"?',
+          options: ['necesitar', 'deber', 'tener que', 'poder'],
+          correct: 0
+        },
+        {
+          id: 18,
+          section_id: 1,
+          severity: 1,
+          question: 'Which verb means "to have to"?',
+          options: ['tener que', 'deber', 'necesitar', 'poder'],
+          correct: 0
+        }
+      ];
+      
+      for (const exercise of moreGrammarExercises) {
+        await addItemsToStore(STORES.GRAMMAR_EXERCISES, [exercise]);
+      }
+      
       console.log("Sample data initialized successfully");
     } else {
-      console.log("Languages already exist, skipping sample data initialization");
+      console.log("Sample data already exists, skipping initialization");
     }
   } catch (error) {
     console.error("Error initializing sample data:", error);
     throw error;
   }
+}
+
+export async function addVocabulary(data: {
+  word: string;
+  translation: string;
+  example: string;
+  context: string;
+  source_language_id: string;
+  target_language_id: string;
+}): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.VOCABULARY, 'readwrite');
+    const store = transaction.objectStore(STORES.VOCABULARY);
+    
+    const vocabularyItem = {
+      ...data,
+      difficulty: 'beginner' // Default difficulty
+    };
+    
+    const request = store.add(vocabularyItem);
+    
+    request.onerror = () => {
+      reject(new Error('Failed to add vocabulary'));
+    };
+    
+    request.onsuccess = () => {
+      resolve();
+    };
+  });
+}
+
+// News articles functions
+export async function saveNewsArticles(articles: NewsArticle[]): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.NEWS_ARTICLES, 'readwrite');
+    const store = transaction.objectStore(STORES.NEWS_ARTICLES);
+    
+    let completed = 0;
+    const total = articles.length;
+    
+    if (total === 0) {
+      resolve();
+      return;
+    }
+    
+    articles.forEach(article => {
+      const request = store.put(article);
+      
+      request.onerror = () => {
+        reject(new Error(`Failed to save article ${article.article_id}`));
+      };
+      
+      request.onsuccess = () => {
+        completed++;
+        if (completed === total) {
+          resolve();
+        }
+      };
+    });
+  });
+}
+
+export async function getNewsArticles(): Promise<NewsArticle[]> {
+  return getAllFromStore<NewsArticle>(STORES.NEWS_ARTICLES);
+}
+
+export async function clearNewsArticles(): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.NEWS_ARTICLES, 'readwrite');
+    const store = transaction.objectStore(STORES.NEWS_ARTICLES);
+    const request = store.clear();
+    
+    request.onerror = () => {
+      reject(new Error('Failed to clear news articles'));
+    };
+    
+    request.onsuccess = () => {
+      resolve();
+    };
+  });
 } 

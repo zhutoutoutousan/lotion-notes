@@ -86,24 +86,32 @@ export async function getProficiencyLevels(): Promise<ProficiencyLevel[]> {
 /**
  * Get vocabulary items for a specific language and difficulty level
  */
-export async function getVocabulary(
-  languageId: string,
-  difficulty: string
-): Promise<VocabularyItem[]> {
-  const { data, error } = await supabase
-    .from('vocabulary')
-    .select('*')
-    .eq('language_id', languageId)
-    .eq('difficulty', difficulty)
-    .order('id');
-  
-  if (error) {
-    console.error('Error fetching vocabulary:', error);
-    return [];
+export const getVocabulary = async (
+  sourceLanguageId: string,
+  targetLanguageId: string,
+  difficulty: ProficiencyLevel = 'beginner'
+): Promise<VocabularyItem[]> => {
+  try {
+    const db = await initDB();
+    const transaction = db.transaction(STORES.VOCABULARY, 'readonly');
+    const store = transaction.objectStore(STORES.VOCABULARY);
+    const index = store.index('language_pair_difficulty');
+    
+    const request = index.getAll([sourceLanguageId, targetLanguageId, difficulty]);
+    
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+      request.onerror = () => {
+        reject(request.error);
+      };
+    });
+  } catch (error) {
+    console.error('Error getting vocabulary:', error);
+    throw error;
   }
-  
-  return data || [];
-}
+};
 
 /**
  * Get grammar sections for a specific language and difficulty level
