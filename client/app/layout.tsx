@@ -9,7 +9,7 @@ import AIChatPanelWrapper from "@/components/ai-chat-panel-wrapper"
 import { TerminalProvider } from '@/contexts/TerminalContext'
 import TerminalWrapper from '@/components/TerminalWrapper'
 import { FloatingBook } from '../components/FloatingBook'
-
+import { Analytics } from "@vercel/analytics/react"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
@@ -99,6 +99,7 @@ export default function RootLayout({
           </ThemeProvider>
         </TerminalProvider>
         <FloatingBook />
+        <Analytics />
       </body>
     </html>
   )
