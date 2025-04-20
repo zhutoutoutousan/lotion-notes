@@ -91,6 +91,9 @@ dependencies:
   '@react-three/fiber':
     specifier: ^9.1.1
     version: 9.1.1(@types/react@19.0.0)(react-dom@19.0.0)(react@19.0.0)(three@0.160.0)
+  '@vercel/analytics':
+    specifier: ^1.5.0
+    version: 1.5.0(next@15.2.4)(react@19.0.0)
   '@xterm/addon-fit':
     specifier: ^0.10.0
     version: 0.10.0(@xterm/xterm@5.5.0)
@@ -2098,6 +2101,36 @@ packages:
       react: '>= 16.8.0'
     dependencies:
       '@use-gesture/core': 10.3.1
+      react: 19.0.0
+    dev: false
+
+  /@vercel/analytics@1.5.0(next@15.2.4)(react@19.0.0):
+    resolution: {integrity: sha512-MYsBzfPki4gthY5HnYN7jgInhAZ7Ac1cYDoRWFomwGHWEX7odTEzbtg9kf/QSo7XEsEAqlQugA6gJ2WS2DEa3g==}
+    peerDependencies:
+      '@remix-run/react': ^2
+      '@sveltejs/kit': ^1 || ^2
+      next: '>= 13'
+      react: ^18 || ^19 || ^19.0.0-rc
+      svelte: '>= 4'
+      vue: ^3
+      vue-router: ^4
+    peerDependenciesMeta:
+      '@remix-run/react':
+        optional: true
+      '@sveltejs/kit':
+        optional: true
+      next:
+        optional: true
+      react:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
+      vue-router:
+        optional: true
+    dependencies:
+      next: 15.2.4(react-dom@19.0.0)(react@19.0.0)
       react: 19.0.0
     dev: false
 
