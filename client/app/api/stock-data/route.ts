@@ -10,6 +10,8 @@ if(process.env.NODE_ENV === 'development') {
 // Suppress deprecation notices
 yahooFinance.suppressNotices(['ripHistorical']);
 
+
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const ticker = searchParams.get('ticker');
