@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.4",
@@ -77,6 +78,9 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.160.0",
     "vaul": "^0.9.6",
+    "yahoo-finance": "^0.3.8",
+    "yahoo-finance2": "^2.13.3",
+    "yfinance": "^0.0.6",
     "zod": "^3.24.1"
   },
   "devDependencies": {
