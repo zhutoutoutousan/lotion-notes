@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Calendar, ClipboardList, BookOpen, Settings, PlusCircle, Languages, Pencil, Newspaper, Database, Heart, LifeBuoy, LineChart, Dumbbell, Image } from "lucide-react"
+import { Home, Calendar, ClipboardList, BookOpen, Settings, PlusCircle, Languages, Pencil, Newspaper, Database, Heart, LifeBuoy, LineChart, Dumbbell, Image, MessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
@@ -22,6 +22,7 @@ export default function Sidebar() {
     { title: 'Stock Scanner', href: '/stock-scanner', icon: LineChart },
     { title: 'Workout Periodization', href: '/workout-periodization', icon: Dumbbell },
     { title: 'Image Generator', href: '/image-generator', icon: Image },
+    { title: 'Conversation', href: '/conversation', icon: MessageSquare },
     { title: 'Editor', href: '/editor', icon: Pencil },
     { title: 'Settings', href: '/settings', icon: Settings },
   ]
