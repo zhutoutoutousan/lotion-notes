@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Send } from 'lucide-react';
 import { ConversationTimeline } from '@/components/ConversationTimeline';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 export default function ConversationPage() {
   const [audioUrl, setAudioUrl] = useState('');
@@ -12,6 +14,7 @@ export default function ConversationPage() {
   const [analysis, setAnalysis] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useTrafficLight, setUseTrafficLight] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Handle file upload
@@ -59,14 +62,26 @@ export default function ConversationPage() {
       return;
     }
     try {
-      const res = await fetch('/api/conversation/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio_url: url }),
-      });
-      if (!res.ok) throw new Error('Failed to analyze audio');
-      const data = await res.json();
-      setAnalysis(data);
+      if (useTrafficLight) {
+        // Analyze entire transcript with traffic light ratings
+        const analysisRes = await fetch('/api/conversation/analyze-transcript', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio_url: url }),
+        });
+        if (!analysisRes.ok) throw new Error('Failed to analyze transcript');
+        const analysisData = await analysisRes.json();
+        setAnalysis(analysisData);
+      } else {
+        const res = await fetch('/api/conversation/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio_url: url }),
+        });
+        if (!res.ok) throw new Error('Failed to analyze audio');
+        const data = await res.json();
+        setAnalysis(data);
+      }
     } catch (err) {
       setError('Error analyzing audio.');
     } finally {
@@ -98,6 +113,14 @@ export default function ConversationPage() {
                 onChange={e => { setAudioUrl(e.target.value); setFile(null); }}
                 className="border rounded px-2 py-1 w-full md:w-96"
               />
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="traffic-light-mode"
+                  checked={useTrafficLight}
+                  onCheckedChange={setUseTrafficLight}
+                />
+                <Label htmlFor="traffic-light-mode">Traffic Light Analysis</Label>
+              </div>
               <Button onClick={handleAnalyze} disabled={loading} className="ml-2">
                 <Send className="mr-2 h-4 w-4" />
                 Analyze
@@ -117,7 +140,66 @@ export default function ConversationPage() {
                       sentences={analysis.sentences} 
                       audioUrl={audioUrl || (file ? URL.createObjectURL(file) : '')}
                       transcriptId={analysis.id}
+                      useTrafficLight={useTrafficLight}
+                      trafficLightAnalysis={analysis.traffic_light_analysis}
                     />
+                  </div>
+                )}
+
+                {/* Overall Analysis (only shown in traffic light mode) */}
+                {useTrafficLight && analysis?.traffic_light_analysis?.overall_analysis && (
+                  <div>
+                    <h3 className="font-semibold mb-1">Overall Analysis</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Strengths</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="list-disc list-inside">
+                            {analysis.traffic_light_analysis.overall_analysis.strengths.map((strength: string, idx: number) => (
+                              <li key={idx}>{strength}</li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Areas for Improvement</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="list-disc list-inside">
+                            {analysis.traffic_light_analysis.overall_analysis.areas_for_improvement.map((area: string, idx: number) => (
+                              <li key={idx}>{area}</li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Key Insights</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="list-disc list-inside">
+                            {analysis.traffic_light_analysis.overall_analysis.key_insights.map((insight: string, idx: number) => (
+                              <li key={idx}>{insight}</li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Recommendations</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="list-disc list-inside">
+                            {analysis.traffic_light_analysis.overall_analysis.recommendations.map((rec: string, idx: number) => (
+                              <li key={idx}>{rec}</li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </div>
                 )}
 
