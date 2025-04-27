@@ -9,7 +9,7 @@ if (!ASSEMBLYAI_API_KEY) {
 
 export async function POST(request: Request) {
   try {
-    const { sentence, transcript_id } = await request.json();
+    const { sentence, transcript_id, mode = 'detailed' } = await request.json();
     if (!sentence) {
       return NextResponse.json({ error: 'sentence is required' }, { status: 400 });
     }
@@ -17,7 +17,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'transcript_id is required' }, { status: 400 });
     }
 
-    const prompt = `You are an expert sales coach analyzing a car dealership sales conversation. For the following sentence and its context, provide a detailed, actionable review in this JSON format:
+    const prompt = mode === 'traffic_light' 
+      ? `You are an expert sales coach analyzing a car dealership sales conversation. For the following sentence, provide a traffic light rating and brief analysis in this JSON format:
+
+{
+  "traffic_light": "red" | "yellow" | "green",
+  "analysis": {
+    "red_flags": [ { "title": string, "details": string } ],
+    "missed_opportunities": [ string ],
+    "coaching_suggestion": string,
+    "ai_insight": string
+  }
+}
+
+- Assign a traffic light rating (red, yellow, green) based on the quality of the sales interaction
+- If there are any major sales mistakes, list them as red_flags (with a short title and details)
+- If there are any missed opportunities, list them in missed_opportunities
+- Provide a specific, actionable coaching_suggestion tailored to this moment
+- If the sentence is neutral or positive, provide a concise ai_insight
+
+Focus on:
+- Objection handling (e.g., price, competitor, timing)
+- Next steps and closing
+- Needs assessment and value proposition
+- Rapport building and information gathering
+- Tying features to pain points
+
+Be specific, concise, and actionable. Do not return generic or vague feedback.
+
+Sentence: "${sentence}"`
+      : `You are an expert sales coach analyzing a car dealership sales conversation. For the following sentence and its context, provide a detailed, actionable review in this JSON format:
 
 {
   "red_flags": [ { "title": string, "details": string } ],
@@ -41,8 +70,7 @@ Focus on:
 
 Be specific, concise, and actionable. Do not return generic or vague feedback.
 
-Sentence: "${sentence}"
-`;
+Sentence: "${sentence}"`;
 
     const response = await fetch(ASSEMBLYAI_API_URL, {
       method: 'POST',

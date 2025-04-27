@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Play, Pause } from 'lucide-react';
 
@@ -6,340 +7,310 @@ interface Sentence {
   text: string;
   start: number;
   end: number;
-  confidence: number;
-  speaker: string | null;
+  analysis?: {
+    traffic_light: 'red' | 'yellow' | 'green';
+    red_flags: Array<{ title: string; details: string }>;
+    missed_opportunities: string[];
+    coaching_suggestion: string;
+    ai_insight: string;
+  } | null;
 }
 
-interface SalesInsight {
-  red_flags?: Array<{ title: string; details: string }>;
-  missed_opportunities?: string[];
-  coaching_suggestion?: string;
-  ai_insight?: string;
-  loading: boolean;
-  error: string | null;
+interface TrafficLightAnalysis {
+  sentences: Array<{
+    text: string;
+    traffic_light: 'red' | 'yellow' | 'green';
+    analysis: {
+      red_flags: Array<{ title: string; details: string }>;
+      missed_opportunities: string[];
+      coaching_suggestion: string;
+      ai_insight: string;
+    };
+  }>;
+  overall_analysis: {
+    strengths: string[];
+    areas_for_improvement: string[];
+    key_insights: string[];
+    recommendations: string[];
+  };
 }
 
 interface ConversationTimelineProps {
   sentences: Sentence[];
   audioUrl: string;
   transcriptId: string;
+  useTrafficLight?: boolean;
+  trafficLightAnalysis?: TrafficLightAnalysis;
 }
 
-const BATCH_SIZE = 5; // Number of sentences to analyze in each batch
-const DELAY_BETWEEN_BATCHES = 2000; // 2 seconds delay between batches
-const DELAY_BETWEEN_REQUESTS = 500; // 500ms delay between individual requests
-
-const getStatusColor = (status: SalesInsight['status']) => {
-  switch (status) {
-    case 'red':
-      return 'bg-red-50 border-red-200';
-    case 'yellow':
-      return 'bg-yellow-50 border-yellow-200';
-    case 'green':
-      return 'bg-green-50 border-green-200';
-    default:
-      return 'bg-gray-50 border-gray-200';
-  }
-};
-
-const getStatusIcon = (status: SalesInsight['status']) => {
-  switch (status) {
-    case 'red':
-      return '🔴';
-    case 'yellow':
-      return '🟡';
-    case 'green':
-      return '🟢';
-    default:
-      return '';
-  }
-};
-
-const getInsightColor = (type: 'positive' | 'warning' | 'critical') => {
-  switch (type) {
-    case 'positive':
-      return 'text-green-700';
-    case 'warning':
-      return 'text-yellow-700';
-    case 'critical':
-      return 'text-red-700';
-  }
-};
-
-export function ConversationTimeline({ sentences, audioUrl, transcriptId }: ConversationTimelineProps) {
+export function ConversationTimeline({
+  sentences,
+  audioUrl,
+  transcriptId,
+  useTrafficLight = false,
+  trafficLightAnalysis,
+}: ConversationTimelineProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [audio] = useState(new Audio(audioUrl));
+  const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(null);
+  const sentenceRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const segmentRefs = useRef<(HTMLAudioElement | null)[]>([]);
-  const [salesInsights, setSalesInsights] = useState<SalesInsight[]>([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(true);
 
   useEffect(() => {
-    // Initialize sales insights state
-    setSalesInsights(sentences.map(() => ({
-      loading: true,
-      error: null
-    })));
-
-    // Analyze all sentences with throttling
-    const analyzeAllSentences = async () => {
-      try {
-        // Split sentences into batches
-        const batches = [];
-        for (let i = 0; i < sentences.length; i += BATCH_SIZE) {
-          batches.push(sentences.slice(i, i + BATCH_SIZE));
-        }
-
-        // Process each batch with delay
-        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-          const batch = batches[batchIndex];
-          
-          // Process each sentence in the batch with delay
-          for (let sentenceIndex = 0; sentenceIndex < batch.length; sentenceIndex++) {
-            const sentence = batch[sentenceIndex];
-            const globalIndex = batchIndex * BATCH_SIZE + sentenceIndex;
-
-            try {
-              const response = await fetch('/api/conversation/analyze-sentence', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                  sentence: sentence.text,
-                  transcript_id: transcriptId
-                })
-              });
-
-              if (!response.ok) {
-                if (response.status === 429) {
-                  // If rate limited, wait for the retry-after time
-                  const retryAfter = parseInt(response.headers.get('retry-after') || '30');
-                  await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-                  // Retry the same request
-                  sentenceIndex--;
-                  continue;
-                }
-                throw new Error('Failed to analyze sentence');
-              }
-
-              const data = await response.json();
-              let parsedInsight: any = {};
-              try {
-                parsedInsight = data.response ? JSON.parse(data.response) : {};
-              } catch (error) {
-                parsedInsight = {};
-              }
-              setSalesInsights(prev => {
-                const newInsights = [...prev];
-                newInsights[globalIndex] = {
-                  ...parsedInsight,
-                  loading: false,
-                  error: null
-                };
-                return newInsights;
-              });
-
-              // Add delay between individual requests
-              if (sentenceIndex < batch.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_REQUESTS));
-              }
-            } catch (error) {
-              console.error(`Error analyzing sentence ${globalIndex}:`, error);
-              setSalesInsights(prev => {
-                const newInsights = [...prev];
-                newInsights[globalIndex] = {
-                  loading: false,
-                  error: 'Failed to analyze sentence'
-                };
-                return newInsights;
-              });
-            }
-          }
-
-          // Add delay between batches
-          if (batchIndex < batches.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
-          }
-        }
-      } catch (error) {
-        console.error('Error in batch processing:', error);
-        setSalesInsights(prev => prev.map(insight => ({
-          ...insight,
-          loading: false,
-          error: 'Failed to analyze sentences'
-        })));
-      } finally {
-        setIsAnalyzing(false);
-      }
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
     };
+  }, []);
 
-    analyzeAllSentences();
-  }, [sentences, transcriptId]);
+  const handleTimeUpdate = () => {
+    setCurrentTime(audio.currentTime);
+  };
 
-  const handlePlaySegment = (start: number, end: number, index: number) => {
-    if (!audioRef.current) return;
-
-    // Set the current time to the start of the segment
-    audioRef.current.currentTime = start / 1000; // Convert milliseconds to seconds
-    audioRef.current.play();
+  const handlePlay = () => {
+    audio.play();
     setIsPlaying(true);
-
-    // Set up an interval to check if we've reached the end of the segment
-    const interval = setInterval(() => {
-      if (audioRef.current) {
-        setCurrentTime(audioRef.current.currentTime * 1000); // Convert seconds to milliseconds
-        if (audioRef.current.currentTime * 1000 >= end) {
-          audioRef.current.pause();
-          setIsPlaying(false);
-          clearInterval(interval);
-        }
-      }
-    }, 100);
-
-    // Clean up interval when component unmounts or when playing a new segment
-    return () => clearInterval(interval);
   };
 
   const handlePause = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      setIsPlaying(false);
+    audio.pause();
+    setIsPlaying(false);
+  };
+
+  const getTrafficLightColor = (sentence: Sentence) => {
+    if (!useTrafficLight || !sentence.analysis) return '';
+    switch (sentence.analysis.traffic_light) {
+      case 'red':
+        return 'bg-red-100 border-red-500';
+      case 'yellow':
+        return 'bg-yellow-100 border-yellow-500';
+      case 'green':
+        return 'bg-green-100 border-green-500';
+      default:
+        return '';
     }
   };
 
-  return (
-    <div className="space-y-4">
-      {/* Hidden audio element for controlling playback */}
-      <audio 
-        ref={audioRef} 
-        src={audioUrl} 
-        className="hidden"
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime * 1000)}
-      />
-      
-      <div className="space-y-4">
-        {sentences.map((sentence, index) => {
-          const isCurrentSegment = currentTime >= sentence.start && currentTime <= sentence.end;
-          const duration = (sentence.end - sentence.start) / 1000; // Convert to seconds
-          const insight = salesInsights[index];
-          // If the object is empty or only has loading/error, show nothing
-          const hasInsight = insight && (
-            (insight.red_flags && insight.red_flags.length > 0) ||
-            (insight.missed_opportunities && insight.missed_opportunities.length > 0) ||
-            (insight.coaching_suggestion && insight.coaching_suggestion.trim() !== '') ||
-            (insight.ai_insight && insight.ai_insight.trim() !== '')
-          );
-          
-          return (
-            <div
-              key={index}
-              className={`p-4 rounded-lg border ${
-                isCurrentSegment ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'
-              }`}
-            >
-              <div className="space-y-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">
-                      {sentence.speaker ? `Speaker ${sentence.speaker}: ` : ''}
-                      {sentence.text}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {Math.floor(sentence.start / 1000)}s - {Math.floor(sentence.end / 1000)}s
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => isCurrentSegment && isPlaying ? handlePause() : handlePlaySegment(sentence.start, sentence.end, index)}
-                    className="shrink-0"
-                  >
-                    {isCurrentSegment && isPlaying ? (
-                      <Pause className="h-4 w-4" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                
-                {/* Mini audio player for this segment */}
-                <div className="w-full">
-                  <audio
-                    ref={el => { segmentRefs.current[index] = el; }}
-                    src={audioUrl}
-                    controls
-                    className="w-full"
-                    onPlay={() => {
-                      if (segmentRefs.current[index]) {
-                        segmentRefs.current[index]!.currentTime = sentence.start / 1000;
-                      }
-                      handlePlaySegment(sentence.start, sentence.end, index);
-                    }}
-                    onPause={handlePause}
-                    onTimeUpdate={(e) => {
-                      const currentTimeMs = e.currentTarget.currentTime * 1000;
-                      if (currentTimeMs >= sentence.end) {
-                        e.currentTarget.pause();
-                      }
-                    }}
-                  >
-                    <source src={audioUrl} type="audio/mpeg" />
-                    Your browser does not support the audio element.
-                  </audio>
-                </div>
+  const scrollToSentence = (sentence: Sentence) => {
+    const element = sentenceRefs.current[sentence.text];
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setSelectedSentence(sentence);
+      audio.currentTime = sentence.start;
+      handlePlay();
+    }
+  };
 
-                {/* Sales Insights */}
-                {insight?.loading && (
-                  <div className="text-sm text-gray-500">Analyzing sales performance...</div>
-                )}
-                
-                {insight?.error && (
-                  <div className="text-sm text-red-500">{insight.error}</div>
-                )}
-                
-                {hasInsight && (
-                  <div className="space-y-3 mt-2">
-                    {insight.red_flags && insight.red_flags.length > 0 && (
-                      <div className="border-l-4 border-red-500 bg-red-50 p-3 rounded">
-                        <div className="font-bold text-red-700 mb-1">Red Flag{insight.red_flags.length > 1 ? 's' : ''}:</div>
-                        {insight.red_flags.map((flag, idx) => (
-                          <div key={idx} className="mb-2">
-                            <div className="font-semibold text-red-600">{flag.title}</div>
-                            <div className="text-red-700 text-sm">{flag.details}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {insight.missed_opportunities && insight.missed_opportunities.length > 0 && (
-                      <div className="border-l-4 border-red-400 bg-red-50 p-3 rounded">
-                        <div className="font-bold text-red-600 mb-1">Missed Opportunity{insight.missed_opportunities.length > 1 ? 'ies' : 'y'}:</div>
-                        <ul className="list-disc pl-5">
-                          {insight.missed_opportunities.map((op, idx) => (
-                            <li key={idx} className="text-red-700 text-sm">{op}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {insight.coaching_suggestion && insight.coaching_suggestion.trim() !== '' && (
-                      <div className="border-l-4 border-green-500 bg-green-50 p-3 rounded">
-                        <div className="font-bold text-green-700 mb-1">Coaching Suggestion:</div>
-                        <div className="text-green-800 text-sm">{insight.coaching_suggestion}</div>
-                      </div>
-                    )}
-                    {insight.ai_insight && insight.ai_insight.trim() !== '' && (
-                      <div className="border-l-4 border-blue-500 bg-blue-50 p-3 rounded">
-                        <div className="font-bold text-blue-700 mb-1">AI Insight:</div>
-                        <div className="text-blue-800 text-sm">{insight.ai_insight}</div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+  const analyzedSentences = sentences.map(sentence => {
+    const matchingAnalysis = trafficLightAnalysis?.sentences.find(
+      a => a.text === sentence.text
+    );
+    return {
+      ...sentence,
+      analysis: matchingAnalysis ? {
+        traffic_light: matchingAnalysis.traffic_light,
+        red_flags: matchingAnalysis.analysis.red_flags,
+        missed_opportunities: matchingAnalysis.analysis.missed_opportunities,
+        coaching_suggestion: matchingAnalysis.analysis.coaching_suggestion,
+        ai_insight: matchingAnalysis.analysis.ai_insight
+      } : null
+    };
+  });
+
+  return (
+    <div className="flex gap-4">
+      <div className="flex-1 space-y-4">
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={isPlaying ? handlePause : handlePlay}
+          >
+            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </Button>
+          <span className="text-sm text-gray-500">
+            {Math.floor(currentTime)}s
+          </span>
+        </div>
+        <div className="space-y-2">
+          {analyzedSentences.map((sentence, index) => {
+            const isCurrent = currentTime >= sentence.start && currentTime < sentence.end;
+            const analysis = sentence.analysis;
+
+            return (
+              <Card
+                key={index}
+                ref={el => { sentenceRefs.current[sentence.text] = el; }}
+                className={`p-4 cursor-pointer transition-colors ${
+                  isCurrent ? 'bg-blue-50' : ''
+                } ${getTrafficLightColor(sentence)}`}
+                onClick={() => {
+                  audio.currentTime = sentence.start;
+                  handlePlay();
+                }}
+              >
+                <CardContent className="p-0">
+                  <p className="mb-2">{sentence.text}</p>
+                  {analysis && (
+                    <div className="text-sm space-y-2">
+                      {analysis.red_flags?.length > 0 && (
+                        <div className="text-red-700">
+                          <strong>Red Flags:</strong>
+                          <ul className="list-disc list-inside">
+                            {analysis.red_flags.map((flag, idx) => (
+                              <li key={idx}>
+                                <strong>{flag.title}:</strong> {flag.details}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {analysis.missed_opportunities?.length > 0 && (
+                        <div className="text-yellow-700">
+                          <strong>Missed Opportunities:</strong>
+                          <ul className="list-disc list-inside">
+                            {analysis.missed_opportunities.map((opp, idx) => (
+                              <li key={idx}>{opp}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {analysis.coaching_suggestion && (
+                        <div className="text-blue-700">
+                          <strong>Coaching Suggestion:</strong> {analysis.coaching_suggestion}
+                        </div>
+                      )}
+                      {analysis.ai_insight && (
+                        <div className="text-green-700">
+                          <strong>AI Insight:</strong> {analysis.ai_insight}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
+      
+      {useTrafficLight && trafficLightAnalysis && (
+        <div className="w-80 fixed right-4 top-20 h-[calc(100vh-5rem)] overflow-y-auto">
+          <Card className="h-full bg-gray-900">
+            <CardContent className="p-4">
+              <h3 className="font-semibold mb-4 text-white">Traffic Light Analysis</h3>
+              
+              {/* Overall Analysis */}
+              <div className="mb-6">
+                <h4 className="font-medium mb-2 text-white">Overall Analysis</h4>
+                <div className="space-y-4">
+                  <div>
+                    <h5 className="text-sm font-medium text-green-300 mb-1">Strengths</h5>
+                    <ul className="list-disc list-inside text-sm text-gray-200">
+                      {trafficLightAnalysis.overall_analysis.strengths.map((strength, idx) => (
+                        <li key={idx}>{strength}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-yellow-300 mb-1">Areas for Improvement</h5>
+                    <ul className="list-disc list-inside text-sm text-gray-200">
+                      {trafficLightAnalysis.overall_analysis.areas_for_improvement.map((area, idx) => (
+                        <li key={idx}>{area}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-blue-300 mb-1">Key Insights</h5>
+                    <ul className="list-disc list-inside text-sm text-gray-200">
+                      {trafficLightAnalysis.overall_analysis.key_insights.map((insight, idx) => (
+                        <li key={idx}>{insight}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-purple-300 mb-1">Recommendations</h5>
+                    <ul className="list-disc list-inside text-sm text-gray-200">
+                      {trafficLightAnalysis.overall_analysis.recommendations.map((rec, idx) => (
+                        <li key={idx}>{rec}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sentence Analysis */}
+              <div className="space-y-4">
+                <h4 className="font-medium mb-2 text-white">Sentence Analysis</h4>
+                {trafficLightAnalysis.sentences.map((sentence, index) => (
+                  <div
+                    key={index}
+                    className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                      selectedSentence?.text === sentence.text ? 'ring-2 ring-blue-500' : ''
+                    } ${
+                      sentence.traffic_light === 'red' ? 'bg-red-900/50' :
+                      sentence.traffic_light === 'yellow' ? 'bg-yellow-900/50' :
+                      'bg-green-900/50'
+                    }`}
+                    onClick={() => {
+                      const matchingSentence = sentences.find(s => s.text === sentence.text);
+                      if (matchingSentence) {
+                        scrollToSentence(matchingSentence);
+                      }
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 ${
+                        sentence.traffic_light === 'red' ? 'bg-red-500' :
+                        sentence.traffic_light === 'yellow' ? 'bg-yellow-500' :
+                        'bg-green-500'
+                      }`} />
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-200">{sentence.text}</p>
+                        <div className="mt-2 text-xs space-y-2">
+                          {sentence.analysis.red_flags?.length > 0 && (
+                            <div className="text-red-300">
+                              <strong className="text-red-200">Red Flags:</strong>
+                              <ul className="list-disc list-inside">
+                                {sentence.analysis.red_flags.map((flag, idx) => (
+                                  <li key={idx}>
+                                    <strong>{flag.title}:</strong> {flag.details}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {sentence.analysis.missed_opportunities?.length > 0 && (
+                            <div className="text-yellow-300">
+                              <strong className="text-yellow-200">Missed Opportunities:</strong>
+                              <ul className="list-disc list-inside">
+                                {sentence.analysis.missed_opportunities.map((opp, idx) => (
+                                  <li key={idx}>{opp}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {sentence.analysis.coaching_suggestion && (
+                            <div className="text-blue-300">
+                              <strong className="text-blue-200">Coaching Suggestion:</strong> {sentence.analysis.coaching_suggestion}
+                            </div>
+                          )}
+                          {sentence.analysis.ai_insight && (
+                            <div className="text-green-300">
+                              <strong className="text-green-200">AI Insight:</strong> {sentence.analysis.ai_insight}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 } 
