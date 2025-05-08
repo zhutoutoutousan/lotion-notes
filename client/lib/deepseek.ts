@@ -1,4 +1,4 @@
-interface Message {
+export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
 }
@@ -23,7 +23,7 @@ export async function createChatCompletion(messages: Message[]): Promise<string>
       model: 'deepseek-chat',
       messages,
       temperature: 0.7,
-      max_tokens: 1000,
+      max_tokens: 5000,
     }),
   });
 
