@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Calendar, ClipboardList, BookOpen, Settings, PlusCircle, Languages, Pencil, Newspaper, Database, Heart, LifeBuoy, LineChart, Dumbbell, Image, MessageSquare, Timer, Clock, CreditCard } from "lucide-react"
+import { Home, Calendar, ClipboardList, BookOpen, Settings, PlusCircle, Languages, Pencil, Newspaper, Database, Heart, LifeBuoy, LineChart, Dumbbell, Image, MessageSquare, Timer, Clock, CreditCard, Trophy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
@@ -17,6 +17,7 @@ export default function Sidebar() {
     { title: 'Language Learning', href: '/language', icon: Languages },
     { title: 'Life Guide', href: '/life-guide', icon: LifeBuoy },
     { title: 'Health Tracking', href: '/health-tracking', icon: Heart },
+    { title: 'Personal Bests', href: '/personal-bests', icon: Trophy },
     { title: 'News Explorer', href: '/news', icon: Newspaper },
     { title: 'Database', href: '/database', icon: Database },
     { title: 'Stock Scanner', href: '/stock-scanner', icon: LineChart },
