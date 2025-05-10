@@ -2,7 +2,7 @@
 
 // Database name and version
 const DB_NAME = "language_learning";
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 // Store names
 export const STORES = {
@@ -15,11 +15,14 @@ export const STORES = {
   LIFE_STAGES: 'lifeStages',
   LIFE_PROGRESS: 'lifeProgress',
   HEALTH_REMINDERS: 'healthReminders',
-  HEALTH_CHECKUPS: 'healthCheckups',
+  HEALTH_METRICS: 'healthMetrics',
   NEWS_ARTICLES: 'newsArticles',
   LANGUAGE_TRAINING: 'languageTraining',
-  TRAINING_TEMPLATES: 'trainingTemplates'
-};
+  TRAINING_TEMPLATES: 'trainingTemplates',
+  DAILY_TRAINING: 'dailyTraining',
+  PERSONAL_BESTS: 'personal_bests',
+  PERSONAL_BEST_GOALS: 'personal_best_goals'
+} as const;
 
 // Add new store name
 const STORE_NAMES = {
@@ -216,38 +219,38 @@ export const initDB = (): Promise<IDBDatabase> => {
       const db = (event.target as IDBOpenDBRequest).result;
 
       // Create or upgrade stores
-      if (!db.objectStoreNames.contains("LANGUAGES")) {
-        const languageStore = db.createObjectStore("LANGUAGES", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.LANGUAGES)) {
+        const languageStore = db.createObjectStore(STORES.LANGUAGES, { keyPath: "id" });
         languageStore.createIndex("name", "name", { unique: true });
       }
 
-      if (!db.objectStoreNames.contains("PROFICIENCY_LEVELS")) {
-        const proficiencyStore = db.createObjectStore("PROFICIENCY_LEVELS", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.PROFICIENCY_LEVELS)) {
+        const proficiencyStore = db.createObjectStore(STORES.PROFICIENCY_LEVELS, { keyPath: "id" });
         proficiencyStore.createIndex("language_id", "language_id", { unique: false });
       }
 
-      if (!db.objectStoreNames.contains("VOCABULARY")) {
-        const vocabularyStore = db.createObjectStore("VOCABULARY", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.VOCABULARY)) {
+        const vocabularyStore = db.createObjectStore(STORES.VOCABULARY, { keyPath: "id" });
         vocabularyStore.createIndex("language_id", "language_id", { unique: false });
         vocabularyStore.createIndex("word", "word", { unique: false });
       }
 
-      if (!db.objectStoreNames.contains("GRAMMAR_EXERCISES")) {
-        const grammarStore = db.createObjectStore("GRAMMAR_EXERCISES", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.GRAMMAR_EXERCISES)) {
+        const grammarStore = db.createObjectStore(STORES.GRAMMAR_EXERCISES, { keyPath: "id" });
         grammarStore.createIndex("language_id", "language_id", { unique: false });
         grammarStore.createIndex("topic", "topic", { unique: false });
       }
 
-      if (!db.objectStoreNames.contains("newsArticles")) {
-        const newsStore = db.createObjectStore("newsArticles", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.NEWS_ARTICLES)) {
+        const newsStore = db.createObjectStore(STORES.NEWS_ARTICLES, { keyPath: "id" });
         newsStore.createIndex("category", "category", { unique: false });
         newsStore.createIndex("language", "language", { unique: false });
         newsStore.createIndex("country", "country", { unique: false });
         newsStore.createIndex("published_at", "published_at", { unique: false });
       }
 
-      if (!db.objectStoreNames.contains("dailyTraining")) {
-        const trainingStore = db.createObjectStore("dailyTraining", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.DAILY_TRAINING)) {
+        const trainingStore = db.createObjectStore(STORES.DAILY_TRAINING, { keyPath: "id" });
         trainingStore.createIndex("language_id", "language_id", { unique: false });
         trainingStore.createIndex("date", "date", { unique: false });
       }
@@ -256,6 +259,20 @@ export const initDB = (): Promise<IDBDatabase> => {
         const templatesStore = db.createObjectStore(STORES.TRAINING_TEMPLATES, { keyPath: "id" });
         templatesStore.createIndex("language_id", "language_id", { unique: false });
         templatesStore.createIndex("name", "name", { unique: false });
+      }
+
+      // Create personal bests store
+      if (!db.objectStoreNames.contains(STORES.PERSONAL_BESTS)) {
+        const personalBestsStore = db.createObjectStore(STORES.PERSONAL_BESTS, { keyPath: 'id' });
+        personalBestsStore.createIndex('category', 'category', { unique: false });
+        personalBestsStore.createIndex('type', 'type', { unique: false });
+      }
+
+      // Create personal best goals store
+      if (!db.objectStoreNames.contains(STORES.PERSONAL_BEST_GOALS)) {
+        const personalBestGoalsStore = db.createObjectStore(STORES.PERSONAL_BEST_GOALS, { keyPath: 'id' });
+        personalBestGoalsStore.createIndex('personalBestId', 'personalBestId', { unique: false });
+        personalBestGoalsStore.createIndex('status', 'status', { unique: false });
       }
     };
   });
