@@ -16,6 +16,7 @@ import {
 } from "@/lib/services/indexedDBService";
 import { LanguageTrainingTracker } from "@/components/LanguageTrainingTracker";
 import { LanguageTrainingPlanner } from "@/components/LanguageTrainingPlanner";
+import { LanguageChatbox } from "../../components/LanguageChatbox";
 
 // Sample languages in case IndexedDB fails
 const FALLBACK_LANGUAGES: Language[] = [
@@ -31,11 +32,26 @@ const FALLBACK_LANGUAGES: Language[] = [
   { id: 'zh', name: 'Chinese', flag: '🇨🇳' },
 ];
 
+// Language codes mapping for speech recognition and TTS
+const LANGUAGE_CODES = {
+  'en': 'en-US',
+  'es': 'es-ES',
+  'pt': 'pt-BR',
+  'de': 'de-DE',
+  'fr': 'fr-FR',
+  'ja': 'ja-JP',
+  'ru': 'ru-RU',
+  'hi': 'hi-IN',
+  'ko': 'ko-KR',
+  'zh': 'zh-CN',
+};
+
 export default function LanguageSelectionPage() {
   const [languages, setLanguages] = useState<Language[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("languages");
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -79,7 +95,8 @@ export default function LanguageSelectionPage() {
 
   // Navigate to the selected language page
   const navigateToLanguage = (languageId: string) => {
-    router.push(`/language/${languageId}`);
+    setSelectedLanguage(languageId);
+    setActiveTab("chat");
   };
 
   if (isLoading) {
@@ -106,6 +123,7 @@ export default function LanguageSelectionPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="languages">Languages</TabsTrigger>
+          <TabsTrigger value="chat">Language Chat</TabsTrigger>
           <TabsTrigger value="planner">Training Planner</TabsTrigger>
           <TabsTrigger value="tracker">Progress Tracker</TabsTrigger>
         </TabsList>
@@ -141,13 +159,45 @@ export default function LanguageSelectionPage() {
             ))}
           </div>
         </TabsContent>
+
+        <TabsContent value="chat">
+          {selectedLanguage ? (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-semibold">
+                  Practice {languages.find(l => l.id === selectedLanguage)?.name}
+                </h2>
+                <Button variant="outline" onClick={() => setActiveTab("languages")}>
+                  Change Language
+                </Button>
+              </div>
+              <LanguageChatbox
+                sourceLanguage={LANGUAGE_CODES[selectedLanguage as keyof typeof LANGUAGE_CODES]}
+                targetLanguage={LANGUAGE_CODES[selectedLanguage as keyof typeof LANGUAGE_CODES]}
+              />
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <h2 className="text-xl font-semibold mb-2">Select a Language</h2>
+              <p className="text-muted-foreground mb-4">
+                Choose a language from the Languages tab to start practicing
+              </p>
+              <Button onClick={() => setActiveTab("languages")}>
+                Browse Languages
+              </Button>
+            </div>
+          )}
+        </TabsContent>
         
         <TabsContent value="planner">
-          <LanguageTrainingPlanner languageId="en" />
+          <LanguageTrainingPlanner languageId={selectedLanguage || "en"} />
         </TabsContent>
         
         <TabsContent value="tracker">
-          <LanguageTrainingTracker languageId="en" languageName="English" />
+          <LanguageTrainingTracker 
+            languageId={selectedLanguage || "en"} 
+            languageName={languages.find(l => l.id === selectedLanguage)?.name || "English"} 
+          />
         </TabsContent>
       </Tabs>
     </div>
