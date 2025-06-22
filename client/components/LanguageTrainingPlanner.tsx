@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +19,10 @@ import {
   deleteTrainingTemplate,
   TrainingTemplate
 } from "@/lib/services/indexedDBService";
-import { Plus, Trash2, Save, Loader2 } from "lucide-react";
+import { Plus, Trash2, Save, Loader2, Edit2, Check, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { MarkdownPreview } from "@/components/markdown-preview";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface LanguageTrainingPlannerProps {
   languageId: string;
@@ -32,6 +35,7 @@ interface Activity {
   percentage: number;
   minutes: number;
   status: "Not Started" | "In Progress" | "Completed";
+  description?: string;
 }
 
 interface Message {
@@ -45,6 +49,7 @@ interface AiRecommendation {
     name: string;
     percentage: number;
     minutes: number;
+    description?: string;
     explanation?: string;
   }[];
   totalPercentage: number;
@@ -138,6 +143,15 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
   const [newTemplateName, setNewTemplateName] = useState("");
   const [activeTab, setActiveTab] = useState<"planner" | "templates">("planner");
   const [editingTemplate, setEditingTemplate] = useState<TrainingTemplate | null>(null);
+  const [savedPlan, setSavedPlan] = useState<DailyTraining | null>(null);
+  const [editingItem, setEditingItem] = useState<number | null>(null);
+  const [editedValues, setEditedValues] = useState<{
+    item_name: string;
+    percentage: number;
+    minutes: number;
+    description: string;
+    status: 'Not Started' | 'In Progress' | 'Completed';
+  } | null>(null);
 
   useEffect(() => {
     loadTrainingData();
@@ -146,10 +160,27 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
 
   const loadTrainingData = async () => {
     try {
-      setIsLoading(false);
+      setIsLoading(true);
+      const today = new Date().toISOString().split('T')[0];
+      const savedTraining = await getDailyTraining(languageId, today);
+      if (savedTraining) {
+        setSavedPlan(savedTraining);
+        // Convert saved training items to activities
+        const savedActivities = savedTraining.items.map(item => ({
+          id: ACTIVITIES[item.item_name as keyof typeof ACTIVITIES]?.id || 0,
+          name: item.item_name,
+          percentage: item.percentage,
+          minutes: item.minutes,
+          status: item.status,
+          description: item.description
+        }));
+        setActivities(savedActivities);
+        setTotalMinutes(savedTraining.total_minutes);
+      }
     } catch (error) {
       console.error("Error loading training data:", error);
       toast.error("Failed to load training data");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -164,7 +195,7 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
     }
   };
 
-  const getAiRecommendation = async () => {
+  const getAiRecommendationForPercentages = async () => {
     if (!activities.length) {
       toast.error("Please select a template first");
       return;
@@ -175,7 +206,13 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
       const messages: Message[] = [
         {
           role: "system",
-          content: `You are a language learning expert. Analyze the user's context and current training plan, then provide optimized percentages for each activity. 
+          content: `You are a language learning expert. Analyze the user's current activities and optimize their percentages only.
+            For each activity, provide a detailed description including:
+            1. Specific exercises and methods to follow
+            2. Clear rules and guidelines
+            3. Assessment criteria or rubric
+            4. Expected outcomes and progress indicators
+
             Return a JSON object with the following structure:
             {
               "activities": [
@@ -184,18 +221,14 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
                   "name": "activity name",
                   "percentage": number,
                   "minutes": number,
+                  "description": "detailed description with exercises, rules, and rubric",
                   "explanation": "brief explanation"
                 }
               ],
               "totalPercentage": 100,
               "totalMinutes": total_minutes
             }
-            The totalPercentage must equal 100.
-            
-            Note: Use these exact activity IDs and names:
-            ${Object.entries(ACTIVITIES).map(([key, value]) => 
-              `- ID ${value.id}: "${value.name}"`
-            ).join('\n')}`
+            The totalPercentage must equal 100. Only provide recommendations for existing activities.`
         },
         {
           role: "user",
@@ -203,7 +236,7 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
             My current activities are: ${activities.map(a => `ID ${a.id}: ${a.name}`).join(", ")}.
             I have ${totalMinutes} minutes available daily.
             Additional context: ${userContext || "No specific context provided."}
-            Please provide recommendations in the specified JSON format.`
+            Please optimize the percentages for these existing activities only.`
         }
       ];
 
@@ -229,7 +262,7 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
           ])
         );
 
-        // Update activities with new percentages, setting missing activities to 0%
+        // Update activities with new percentages, keeping existing activities
         const updatedActivities = activities.map(activity => {
           const recommendedActivity = recommendationsMap.get(activity.id);
           
@@ -237,21 +270,99 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
             return {
               ...activity,
               percentage: recommendedActivity.percentage,
-              minutes: recommendedActivity.minutes
+              minutes: recommendedActivity.minutes,
+              description: recommendedActivity.description
             };
           } else {
-            // If activity is not in recommendations, set it to 0%
-            return {
-              ...activity,
-              percentage: 0,
-              minutes: 0
-            };
+            return activity;
           }
         });
 
         setActivities(updatedActivities);
         setShowAiRecommendation(true);
-        toast.success("AI recommendations applied!");
+        toast.success("AI percentage recommendations applied!");
+      } catch (parseError) {
+        console.error("Error parsing AI response:", parseError);
+        toast.error("Could not parse AI recommendations");
+      }
+    } catch (error) {
+      console.error("Error getting AI recommendation:", error);
+      toast.error("Failed to get AI recommendations");
+    } finally {
+      setIsGeneratingRecommendation(false);
+    }
+  };
+
+  const getAiRecommendationForAll = async () => {
+    setIsGeneratingRecommendation(true);
+    try {
+      const messages: Message[] = [
+        {
+          role: "system",
+          content: `You are a language learning expert. Recommend 5 optimal activities and their time percentages.
+            For each activity, provide a detailed description including:
+            1. Specific exercises and methods to follow
+            2. Clear rules and guidelines
+            3. Assessment criteria or rubric
+            4. Expected outcomes and progress indicators
+
+            Return a JSON object with the following structure:
+            {
+              "activities": [
+                {
+                  "id": number,
+                  "name": "activity name",
+                  "percentage": number,
+                  "minutes": number,
+                  "description": "detailed description with exercises, rules, and rubric, in markdown format",
+                  "explanation": "brief explanation"
+                }
+              ],
+              "totalPercentage": 100,
+              "totalMinutes": total_minutes
+            }
+            The totalPercentage must equal 100. Choose exactly 5 activities of your choice`
+        },
+        {
+          role: "user",
+          content: `I am learning ${languageId} at ${proficiencyLevel} level. 
+            I have ${totalMinutes} minutes available daily.
+            Additional context: ${userContext || "No specific context provided."}
+            Please recommend 5 optimal activities with their percentages.`
+        }
+      ];
+
+      const response = await createChatCompletion(messages);
+      
+      try {
+        const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/);
+        if (!jsonMatch) {
+          throw new Error("No JSON found in response");
+        }
+
+        const recommendations: AiRecommendation = JSON.parse(jsonMatch[1]);
+        
+        if (recommendations.totalPercentage !== 100) {
+          throw new Error("Total percentage must be 100");
+        }
+
+        if (recommendations.activities.length !== 5) {
+          throw new Error("Must recommend exactly 5 activities");
+        }
+
+        // Replace all activities with the recommended ones
+        const newActivities = recommendations.activities.map(activity => ({
+          id: activity.id,
+          name: activity.name,
+          percentage: activity.percentage,
+          minutes: activity.minutes,
+          description: activity.description,
+          status: "Not Started" as const
+        }));
+
+        setActivities(newActivities);
+        setShowAiRecommendation(true);
+        toast.success("New AI recommendations applied!");
       } catch (parseError) {
         console.error("Error parsing AI response:", parseError);
         toast.error("Could not parse AI recommendations");
@@ -318,23 +429,30 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
     }
 
     try {
+      const today = new Date().toISOString().split('T')[0];
       const training: DailyTraining = {
         language_id: languageId,
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         total_minutes: totalMinutes,
         items: activities.map(activity => ({
           language_id: languageId,
-          date: new Date().toISOString().split('T')[0],
+          date: today,
           item_name: activity.name,
           percentage: activity.percentage,
           minutes: activity.minutes,
-          status: activity.status as "Not Started" | "In Progress" | "Completed",
+          status: activity.status,
+          description: activity.description || "",
           bookmarks: []
         }))
       };
 
       await saveDailyTraining(training);
+      setSavedPlan(training);
       toast.success("Training plan saved successfully");
+
+      // Display saved plan summary
+      setShowAiRecommendation(false); // Hide AI recommendation if showing
+      
     } catch (error) {
       console.error("Error saving training plan:", error);
       toast.error("Failed to save training plan");
@@ -442,6 +560,123 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
     }
   };
 
+  const handleEditItem = (index: number, item: any) => {
+    setEditingItem(index);
+    setEditedValues({
+      item_name: item.item_name,
+      percentage: item.percentage,
+      minutes: item.minutes,
+      description: item.description || '',
+      status: item.status
+    });
+  };
+
+  const handleSaveEdit = async (index: number) => {
+    if (!editedValues || !savedPlan) return;
+
+    const updatedItems = [...savedPlan.items];
+    updatedItems[index] = {
+      ...updatedItems[index],
+      ...editedValues
+    };
+
+    const updatedPlan = {
+      ...savedPlan,
+      items: updatedItems
+    };
+
+    try {
+      await saveDailyTraining(updatedPlan);
+      setSavedPlan(updatedPlan);
+      setEditingItem(null);
+      setEditedValues(null);
+      toast.success("Activity updated successfully");
+    } catch (error) {
+      console.error("Error updating activity:", error);
+      toast.error("Failed to update activity");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItem(null);
+    setEditedValues(null);
+  };
+
+  const handleDeleteSavedItem = async (index: number) => {
+    if (!savedPlan) return;
+
+    const updatedItems = savedPlan.items.filter((_, i) => i !== index);
+    const updatedPlan = {
+      ...savedPlan,
+      items: updatedItems
+    };
+
+    try {
+      await saveDailyTraining(updatedPlan);
+      setSavedPlan(updatedPlan);
+      toast.success("Activity deleted successfully");
+    } catch (error) {
+      console.error("Error deleting activity:", error);
+      toast.error("Failed to delete activity");
+    }
+  };
+
+  const handleAddNewItem = async () => {
+    if (!savedPlan) return;
+
+    const newItem = {
+      language_id: languageId,
+      date: savedPlan.date,
+      item_name: "New Activity",
+      percentage: 0,
+      minutes: 0,
+      status: "Not Started" as const,
+      description: "",
+      bookmarks: []
+    };
+
+    const updatedItems = [...savedPlan.items, newItem];
+    const updatedPlan = {
+      ...savedPlan,
+      items: updatedItems
+    };
+
+    try {
+      await saveDailyTraining(updatedPlan);
+      setSavedPlan(updatedPlan);
+      // Start editing the new item immediately
+      handleEditItem(updatedItems.length - 1, newItem);
+      toast.success("New activity added");
+    } catch (error) {
+      console.error("Error adding new activity:", error);
+      toast.error("Failed to add new activity");
+    }
+  };
+
+  const handleStatusChange = async (index: number, newStatus: 'Not Started' | 'In Progress' | 'Completed') => {
+    if (!savedPlan) return;
+
+    const updatedItems = [...savedPlan.items];
+    updatedItems[index] = {
+      ...updatedItems[index],
+      status: newStatus
+    };
+
+    const updatedPlan = {
+      ...savedPlan,
+      items: updatedItems
+    };
+
+    try {
+      await saveDailyTraining(updatedPlan);
+      setSavedPlan(updatedPlan);
+      toast.success("Status updated successfully");
+    } catch (error) {
+      console.error("Error updating status:", error);
+      toast.error("Failed to update status");
+    }
+  };
+
   if (isLoading) {
     return <div>Loading...</div>;
   }
@@ -535,16 +770,30 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
 
             <div className="flex justify-between items-center">
               <Button
-                variant="outline"
                 onClick={() => setShowTemplateModal(true)}
                 disabled={activities.length === 0}
+                variant="default"
+                className="mr-2"
               >
                 <Save className="mr-2 h-4 w-4" />
                 Save as Template
               </Button>
               <Button
                 variant="outline"
-                onClick={getAiRecommendation}
+                onClick={getAiRecommendationForPercentages}
+                disabled={isGeneratingRecommendation}
+                className="mr-2"
+              >
+                {isGeneratingRecommendation ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                Get AI Percentage Recommendation
+              </Button>
+              <Button
+                variant="outline"
+                onClick={getAiRecommendationForAll}
                 disabled={isGeneratingRecommendation}
               >
                 {isGeneratingRecommendation ? (
@@ -552,48 +801,59 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
                 ) : (
                   <Plus className="mr-2 h-4 w-4" />
                 )}
-                Get AI Recommendation
+                Get 5 AI Recommendations
               </Button>
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-4 gap-4 items-center font-medium">
+              <div className="grid grid-cols-5 gap-4 items-center font-medium">
                 <div className="col-span-1">Activity</div>
                 <div className="col-span-1 text-right">Percentage</div>
                 <div className="col-span-1 text-right">Minutes</div>
+                <div className="col-span-1">Description</div>
                 <div className="col-span-1 text-right">Actions</div>
               </div>
               {activities.map((activity, index) => (
-                <div key={index} className="grid grid-cols-4 gap-4 items-center">
-                  <div className="col-span-1">
-                    <Input
-                      value={activity.name}
-                      onChange={(e) => handleActivityChange(index, "name", e.target.value)}
-                      placeholder="Activity name"
-                    />
-                  </div>
-                  <div className="col-span-1 flex items-center justify-end gap-2">
-                    <Input
-                      type="number"
-                      value={activity.percentage}
-                      onChange={(e) => handleActivityChange(index, "percentage", Number(e.target.value))}
-                      className="w-24"
-                      min={0}
-                      max={100}
-                    />
-                    <span className="text-sm text-muted-foreground">%</span>
-                  </div>
-                  <div className="col-span-1 text-right">
-                    {Math.round((activity.percentage / 100) * totalMinutes)} min
-                  </div>
-                  <div className="col-span-1 flex justify-end">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleRemoveActivity(index)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                <div key={index} className="space-y-2">
+                  <div className="grid grid-cols-5 gap-4 items-center">
+                    <div className="col-span-1">
+                      <Input
+                        value={activity.name}
+                        onChange={(e) => handleActivityChange(index, "name", e.target.value)}
+                        placeholder="Activity name"
+                      />
+                    </div>
+                    <div className="col-span-1 flex items-center justify-end gap-2">
+                      <Input
+                        type="number"
+                        value={activity.percentage}
+                        onChange={(e) => handleActivityChange(index, "percentage", Number(e.target.value))}
+                        className="w-24"
+                        min={0}
+                        max={100}
+                      />
+                      <span className="text-sm text-muted-foreground">%</span>
+                    </div>
+                    <div className="col-span-1 text-right">
+                      {Math.round((activity.percentage / 100) * totalMinutes)} min
+                    </div>
+                    <div className="col-span-1">
+                      <Textarea
+                        value={activity.description || ""}
+                        onChange={(e) => handleActivityChange(index, "description", e.target.value)}
+                        placeholder="Enter activity description, rules, and rubric..."
+                        className="min-h-[80px] resize-y"
+                      />
+                    </div>
+                    <div className="col-span-1 flex justify-end">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleRemoveActivity(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -618,6 +878,140 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
                 Save Plan
               </Button>
             </div>
+
+            {/* Display Saved Plan Summary */}
+            {savedPlan && (
+              <div className="mt-8 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-bold">Today's Saved Plan</h2>
+                  <Button onClick={handleAddNewItem} variant="default" className="ml-2">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Activity
+                  </Button>
+                </div>
+                <div className="text-lg">Total Time: {savedPlan.total_minutes} minutes</div>
+                <div className="space-y-4">
+                  {savedPlan.items.map((item, index) => (
+                    <div key={index} className="space-y-2 p-4 border rounded-lg bg-card">
+                      {editingItem === index ? (
+                        // Edit mode
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Activity Name</label>
+                              <Input
+                                value={editedValues?.item_name}
+                                onChange={(e) => setEditedValues(prev => ({ ...prev!, item_name: e.target.value }))}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Percentage</label>
+                              <Input
+                                type="number"
+                                value={editedValues?.percentage}
+                                onChange={(e) => setEditedValues(prev => ({ ...prev!, percentage: Number(e.target.value) }))}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Description (Markdown supported)</label>
+                            <Textarea
+                              value={editedValues?.description}
+                              onChange={(e) => setEditedValues(prev => ({ ...prev!, description: e.target.value }))}
+                              className="min-h-[100px]"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Status</label>
+                            <Select
+                              value={editedValues?.status}
+                              onValueChange={(value: 'Not Started' | 'In Progress' | 'Completed') => 
+                                setEditedValues(prev => ({ ...prev!, status: value }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Not Started">Not Started</SelectItem>
+                                <SelectItem value="In Progress">In Progress</SelectItem>
+                                <SelectItem value="Completed">Completed</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex justify-end space-x-2">
+                            <Button 
+                              onClick={handleCancelEdit} 
+                              variant="outline"
+                            >
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </Button>
+                            <Button 
+                              onClick={() => handleSaveEdit(index)}
+                              variant="default"
+                            >
+                              <Check className="h-4 w-4 mr-2" />
+                              Save
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        // Display mode
+                        <>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium">{item.item_name}</div>
+                              <div className="text-sm text-gray-500">
+                                {item.percentage}% • {item.minutes} minutes
+                              </div>
+                              <Select
+                                value={item.status}
+                                onValueChange={(value: 'Not Started' | 'In Progress' | 'Completed') => 
+                                  handleStatusChange(index, value)
+                                }
+                              >
+                                <SelectTrigger className="w-[140px] h-8 mt-2">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Not Started">Not Started</SelectItem>
+                                  <SelectItem value="In Progress">In Progress</SelectItem>
+                                  <SelectItem value="Completed">Completed</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button
+                                onClick={() => handleEditItem(index, item)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteSavedItem(index)}
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          {item.description && (
+                            <div className="pl-4 border-l-2 border-gray-200 mt-4">
+                              <MarkdownPreview content={item.description} />
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </CardContent>
         </Card>
       ) : (
@@ -711,6 +1105,7 @@ export function LanguageTrainingPlanner({ languageId, languageName }: LanguageTr
           </Card>
         </div>
       )}
+
     </div>
   );
 } 

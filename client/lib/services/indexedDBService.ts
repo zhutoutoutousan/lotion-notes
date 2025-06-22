@@ -168,6 +168,7 @@ export interface TrainingItem {
   percentage: number;
   minutes: number;
   status: 'Not Started' | 'In Progress' | 'Completed';
+  description?: string;
   bookmarks: string[];
 }
 
