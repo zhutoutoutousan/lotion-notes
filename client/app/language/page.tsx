@@ -17,6 +17,7 @@ import {
 import { LanguageTrainingTracker } from "@/components/LanguageTrainingTracker";
 import { LanguageTrainingPlanner } from "@/components/LanguageTrainingPlanner";
 import { LanguageChatbox } from "../../components/LanguageChatbox";
+import { LanguageFlashcardTrainer } from "@/components/LanguageFlashcardTrainer";
 
 // Sample languages in case IndexedDB fails
 const FALLBACK_LANGUAGES: Language[] = [
@@ -126,6 +127,7 @@ export default function LanguageSelectionPage() {
           <TabsTrigger value="chat">Language Chat</TabsTrigger>
           <TabsTrigger value="planner">Training Planner</TabsTrigger>
           <TabsTrigger value="tracker">Progress Tracker</TabsTrigger>
+          <TabsTrigger value="flashcards">Flashcards</TabsTrigger>
         </TabsList>
         
         <TabsContent value="languages">
@@ -190,7 +192,10 @@ export default function LanguageSelectionPage() {
         </TabsContent>
         
         <TabsContent value="planner">
-          <LanguageTrainingPlanner languageId={selectedLanguage || "en"} />
+          <LanguageTrainingPlanner 
+            languageId={selectedLanguage || "en"} 
+            languageName={languages.find(l => l.id === selectedLanguage)?.name || "English"}
+          />
         </TabsContent>
         
         <TabsContent value="tracker">
@@ -198,6 +203,25 @@ export default function LanguageSelectionPage() {
             languageId={selectedLanguage || "en"} 
             languageName={languages.find(l => l.id === selectedLanguage)?.name || "English"} 
           />
+        </TabsContent>
+        
+        <TabsContent value="flashcards">
+          {selectedLanguage ? (
+            <LanguageFlashcardTrainer
+              languageId={selectedLanguage}
+              languageName={languages.find(l => l.id === selectedLanguage)?.name || "English"}
+            />
+          ) : (
+            <div className="text-center py-8">
+              <h2 className="text-xl font-semibold mb-2">Select a Language</h2>
+              <p className="text-muted-foreground mb-4">
+                Choose a language from the Languages tab to start practicing with flashcards
+              </p>
+              <Button onClick={() => setActiveTab("languages")}>
+                Browse Languages
+              </Button>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
