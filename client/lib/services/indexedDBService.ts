@@ -21,7 +21,8 @@ export const STORES = {
   TRAINING_TEMPLATES: 'trainingTemplates',
   DAILY_TRAINING: 'dailyTraining',
   PERSONAL_BESTS: 'personal_bests',
-  PERSONAL_BEST_GOALS: 'personal_best_goals'
+  PERSONAL_BEST_GOALS: 'personal_best_goals',
+  FLASHCARD_SETS: 'flashcard_sets'
 } as const;
 
 // Add new store name
@@ -201,10 +202,32 @@ export interface Activity {
   status: "Not Started" | "In Progress" | "Completed";
 }
 
+// Flashcard types
+export interface Flashcard {
+  id: string;
+  front: string;
+  back: string;
+  context: string;
+  lastReviewed: Date | null;
+  nextReview: Date | null;
+  repetitions: number;
+  easeFactor: number;
+  interval: number;
+}
+
+export interface FlashcardSet {
+  id: string;
+  languageId: string;
+  topic: string;
+  cards: Flashcard[];
+  createdAt: Date;
+  lastReviewed: Date | null;
+}
+
 // Initialize the database
 export const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(DB_NAME, DB_VERSION + 1); // Increment version for new store
 
     request.onerror = () => {
       console.error("Error opening database");
@@ -274,6 +297,14 @@ export const initDB = (): Promise<IDBDatabase> => {
         const personalBestGoalsStore = db.createObjectStore(STORES.PERSONAL_BEST_GOALS, { keyPath: 'id' });
         personalBestGoalsStore.createIndex('personalBestId', 'personalBestId', { unique: false });
         personalBestGoalsStore.createIndex('status', 'status', { unique: false });
+      }
+
+      // Create flashcard sets store
+      if (!db.objectStoreNames.contains(STORES.FLASHCARD_SETS)) {
+        const flashcardSetsStore = db.createObjectStore(STORES.FLASHCARD_SETS, { keyPath: "id" });
+        flashcardSetsStore.createIndex("languageId", "languageId", { unique: false });
+        flashcardSetsStore.createIndex("topic", "topic", { unique: false });
+        flashcardSetsStore.createIndex("createdAt", "createdAt", { unique: false });
       }
     };
   });
@@ -1340,6 +1371,103 @@ export async function deleteTrainingTemplate(templateId: string): Promise<void> 
 
     request.onerror = () => {
       reject(new Error('Failed to delete training template'));
+    };
+
+    request.onsuccess = () => {
+      resolve();
+    };
+  });
+}
+
+// Flashcard functions
+export async function saveFlashcardSet(flashcardSet: FlashcardSet): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.FLASHCARD_SETS, 'readwrite');
+    const store = transaction.objectStore(STORES.FLASHCARD_SETS);
+    
+    const request = store.put(flashcardSet);
+    
+    request.onerror = () => {
+      reject(new Error('Failed to save flashcard set'));
+    };
+    
+    request.onsuccess = () => {
+      resolve();
+    };
+  });
+}
+
+export async function getFlashcardSets(languageId: string): Promise<FlashcardSet[]> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.FLASHCARD_SETS, 'readonly');
+    const store = transaction.objectStore(STORES.FLASHCARD_SETS);
+    const index = store.index("languageId");
+    const request = index.getAll(languageId);
+
+    request.onerror = () => {
+      reject(new Error('Failed to get flashcard sets'));
+    };
+
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+  });
+}
+
+export async function updateFlashcard(setId: string, cardId: string, updates: Partial<Flashcard>): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.FLASHCARD_SETS, 'readwrite');
+    const store = transaction.objectStore(STORES.FLASHCARD_SETS);
+    
+    const getRequest = store.get(setId);
+    
+    getRequest.onerror = () => {
+      reject(new Error('Failed to get flashcard set'));
+    };
+    
+    getRequest.onsuccess = () => {
+      const flashcardSet = getRequest.result as FlashcardSet;
+      if (!flashcardSet) {
+        reject(new Error('Flashcard set not found'));
+        return;
+      }
+      
+      const cardIndex = flashcardSet.cards.findIndex(card => card.id === cardId);
+      if (cardIndex === -1) {
+        reject(new Error('Card not found'));
+        return;
+      }
+      
+      flashcardSet.cards[cardIndex] = {
+        ...flashcardSet.cards[cardIndex],
+        ...updates
+      };
+      
+      const updateRequest = store.put(flashcardSet);
+      
+      updateRequest.onerror = () => {
+        reject(new Error('Failed to update flashcard'));
+      };
+      
+      updateRequest.onsuccess = () => {
+        resolve();
+      };
+    };
+  });
+}
+
+export async function deleteFlashcardSet(setId: string): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.FLASHCARD_SETS, 'readwrite');
+    const store = transaction.objectStore(STORES.FLASHCARD_SETS);
+    const request = store.delete(setId);
+
+    request.onerror = () => {
+      reject(new Error('Failed to delete flashcard set'));
     };
 
     request.onsuccess = () => {
