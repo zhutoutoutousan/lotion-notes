@@ -2,7 +2,7 @@
 
 // Database name and version
 const DB_NAME = "language_learning";
-const DB_VERSION = 7;
+const DB_VERSION = 9;
 
 // Store names
 export const STORES = {
@@ -227,7 +227,7 @@ export interface FlashcardSet {
 // Initialize the database
 export const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION + 1); // Increment version for new store
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {
       console.error("Error opening database");
@@ -254,9 +254,12 @@ export const initDB = (): Promise<IDBDatabase> => {
       }
 
       if (!db.objectStoreNames.contains(STORES.VOCABULARY)) {
-        const vocabularyStore = db.createObjectStore(STORES.VOCABULARY, { keyPath: "id" });
+        const vocabularyStore = db.createObjectStore(STORES.VOCABULARY, { keyPath: "id", autoIncrement: true });
         vocabularyStore.createIndex("language_id", "language_id", { unique: false });
         vocabularyStore.createIndex("word", "word", { unique: false });
+        vocabularyStore.createIndex("source_language_id", "source_language_id", { unique: false });
+        vocabularyStore.createIndex("target_language_id", "target_language_id", { unique: false });
+        vocabularyStore.createIndex("difficulty", "difficulty", { unique: false });
       }
 
       if (!db.objectStoreNames.contains(STORES.GRAMMAR_EXERCISES)) {
@@ -428,29 +431,21 @@ export async function getVocabulary(
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORES.VOCABULARY, "readonly");
     const store = transaction.objectStore(STORES.VOCABULARY);
-    const index = store.index("language_pair_difficulty");
+    const request = store.getAll();
     
-    // Ensure all values are strings and not null/undefined
-    if (!sourceLanguageId || !targetLanguageId || !difficulty) {
-      reject(new Error("Invalid parameters: sourceLanguageId, targetLanguageId, and difficulty must be non-empty strings"));
-      return;
-    }
-
-    // Create a key range for the compound index with valid key types
-    const keyRange = IDBKeyRange.only([
-      String(sourceLanguageId),
-      String(targetLanguageId),
-      String(difficulty)
-    ]);
-    
-    const request = index.getAll(keyRange);
-
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
-
     request.onerror = () => {
       reject(new Error("Failed to get vocabulary items"));
+    };
+
+    request.onsuccess = () => {
+      // Filter the results in memory since we don't have a compound index
+      const allItems = request.result as VocabularyItem[];
+      const filteredItems = allItems.filter(item => 
+        item.source_language_id === sourceLanguageId &&
+        item.target_language_id === targetLanguageId &&
+        item.difficulty === difficulty
+      );
+      resolve(filteredItems);
     };
   });
 }

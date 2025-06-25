@@ -14,8 +14,10 @@ import {
   getFlashcardSets, 
   updateFlashcard, 
   deleteFlashcardSet,
+  getVocabulary,
   type Flashcard,
-  type FlashcardSet
+  type FlashcardSet,
+  type VocabularyItem as DBVocabularyItem
 } from "@/lib/services/indexedDBService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Plus, Trash2, Check, X, Award } from "lucide-react";
@@ -26,16 +28,6 @@ import { motion, AnimatePresence } from "framer-motion";
 interface Message {
   role: "system" | "user" | "assistant";
   content: string;
-}
-
-interface Card {
-  id: string;
-  front: string;
-  back: string;
-  context: string;
-  repetitions: number;
-  easeFactor: number;
-  interval: number;
 }
 
 interface AnswerFeedback {
@@ -55,20 +47,24 @@ export function LanguageFlashcardTrainer({ languageId, languageName }: LanguageF
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentSet, setCurrentSet] = useState<FlashcardSet | null>(null);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [currentVocabIndex, setCurrentVocabIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [savedSets, setSavedSets] = useState<FlashcardSet[]>([]);
+  const [vocabularyItems, setVocabularyItems] = useState<DBVocabularyItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("create");
+  const [isVocabLoading, setIsVocabLoading] = useState(false);
   const [userAnswer, setUserAnswer] = useState("");
-  const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
-  const [sessionScore, setSessionScore] = useState(0);
-  const [totalAttempts, setTotalAttempts] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
+  const [activeTab, setActiveTab] = useState("create");
+  const [totalAttempts, setTotalAttempts] = useState(0);
+  const [sessionScore, setSessionScore] = useState(0);
 
-  // Load saved flashcard sets
+  // Load saved flashcard sets and vocabulary
   useEffect(() => {
     loadSavedSets();
+    loadVocabulary();
   }, [languageId]);
 
   const loadSavedSets = async () => {
@@ -80,6 +76,31 @@ export function LanguageFlashcardTrainer({ languageId, languageName }: LanguageF
       toast.error("Failed to load saved flashcard sets");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadVocabulary = async () => {
+    setIsVocabLoading(true);
+    try {
+      // Load vocabulary for both directions (source to target and target to source)
+      const sourceToTarget = await getVocabulary(languageId, 'en', 'beginner');
+      const targetToSource = await getVocabulary('en', languageId, 'beginner');
+      
+      // Combine and shuffle the vocabulary items
+      const allItems = [...sourceToTarget, ...targetToSource];
+      
+      if (allItems.length === 0) {
+        toast.info("No vocabulary items found for this language pair. Try adding some vocabulary first.");
+        return;
+      }
+      
+      const shuffledItems = allItems.sort(() => Math.random() - 0.5);
+      setVocabularyItems(shuffledItems);
+    } catch (error) {
+      console.error("Error loading vocabulary:", error);
+      toast.error("Failed to load vocabulary items");
+    } finally {
+      setIsVocabLoading(false);
     }
   };
 
@@ -96,9 +117,9 @@ export function LanguageFlashcardTrainer({ languageId, languageName }: LanguageF
 
     setIsGenerating(true);
     try {
-      const messages = [
+      const messages: Message[] = [
         {
-          role: "system",
+          role: "system" as const,
           content: `You are a language learning expert. Create ${numCards} flashcards for learning ${languageName}.
             Each flashcard should have:
             1. Front side (in ${languageName})
@@ -117,7 +138,7 @@ export function LanguageFlashcardTrainer({ languageId, languageName }: LanguageF
             }`
         },
         {
-          role: "user",
+          role: "user" as const,
           content: `Create ${numCards} flashcards for learning ${languageName} about: ${topic}. Remember to respond with ONLY the JSON object, no other text.`
         }
       ];
@@ -175,7 +196,7 @@ export function LanguageFlashcardTrainer({ languageId, languageName }: LanguageF
       }
 
       // Validate each card
-      const validCards = flashcardsData.cards.filter(card => 
+      const validCards = flashcardsData.cards.filter((card: { front: string; back: string; context: string }) => 
         card && 
         typeof card.front === 'string' && 
         typeof card.back === 'string' && 
@@ -228,15 +249,28 @@ export function LanguageFlashcardTrainer({ languageId, languageName }: LanguageF
   };
 
   const checkAnswer = async () => {
-    if (!currentSet || !userAnswer.trim()) return;
+    if ((!currentSet && !vocabularyItems.length) || !userAnswer.trim()) return;
 
     setIsChecking(true);
     try {
-      const card: Card = currentSet.cards[currentCardIndex];
-      const messages: Message[] = [
-        {
-          role: "system",
-          content: `You are a language learning expert and professional ${languageName} teacher evaluating student answers.
+      // Get the current item based on whether we're practicing flashcards or vocabulary
+      const currentItem = activeTab === "practice" 
+        ? currentSet!.cards[currentCardIndex]
+        : vocabularyItems[currentVocabIndex];
+
+      // Prepare the prompt and answer based on the item type
+      const prompt = activeTab === "practice" 
+        ? (currentItem as Flashcard).front 
+        : (currentItem as DBVocabularyItem).word;
+      const correctAnswer = activeTab === "practice" 
+        ? (currentItem as Flashcard).back 
+        : (currentItem as DBVocabularyItem).translation;
+      const context = activeTab === "practice" 
+        ? (currentItem as Flashcard).context 
+        : (currentItem as DBVocabularyItem).example;
+
+      const systemPrompt = activeTab === "practice" 
+        ? `You are a language learning expert and professional ${languageName} teacher evaluating student answers.
             Analyze the answer comprehensively and provide detailed feedback on:
 
             1. ACCURACY (30%):
@@ -290,14 +324,89 @@ export function LanguageFlashcardTrainer({ languageId, languageName }: LanguageF
               },
               "improvedAnswer": "corrected version of the answer"
             }`
+        : `You are a language learning expert and professional ${languageName} teacher helping students master vocabulary.
+            Analyze the student's answer and provide comprehensive feedback and examples.
+            
+            For this vocabulary item, provide:
+            1. ACCURACY (30%):
+            - Exact meaning match
+            - Alternative translations
+            - Context appropriateness
+            - Common synonyms and antonyms
+            
+            2. USAGE (25%):
+            - Common collocations
+            - Idiomatic expressions
+            - Register (formal/informal)
+            - Cultural context
+            
+            3. PRACTICAL EXAMPLES (25%):
+            - 3-4 example sentences showing different contexts
+            - Real-life situations where this word is commonly used
+            - Common phrases or expressions containing this word
+            - Variations in meaning based on context
+            
+            4. CULTURAL & LEARNING TIPS (20%):
+            - Cultural nuances
+            - Common mistakes to avoid
+            - Memory tricks or mnemonics
+            - Related vocabulary
+            
+            Respond with ONLY a JSON object in this format:
+            {
+              "score": number (0-100),
+              "isCorrect": boolean,
+              "feedback": {
+                "summary": "brief overall assessment",
+                "accuracy": {
+                  "score": number (0-30),
+                  "comments": "specific feedback",
+                  "alternatives": ["list of alternative translations"],
+                  "synonyms": ["list of synonyms"],
+                  "antonyms": ["list of antonyms"]
+                },
+                "usage": {
+                  "score": number (0-25),
+                  "comments": "specific feedback",
+                  "collocations": ["common word combinations"],
+                  "expressions": ["idiomatic expressions"],
+                  "register": "formal/informal usage notes"
+                },
+                "examples": {
+                  "score": number (0-25),
+                  "sentences": [
+                    {
+                      "original": "example in ${languageName}",
+                      "translation": "English translation",
+                      "context": "usage context"
+                    }
+                  ],
+                  "situations": ["real-life usage scenarios"]
+                },
+                "cultural_tips": {
+                  "score": number (0-20),
+                  "cultural_notes": ["cultural usage notes"],
+                  "common_mistakes": ["mistakes to avoid"],
+                  "memory_tricks": ["learning tips"],
+                  "related_words": ["related vocabulary"]
+                }
+              },
+              "improvedAnswer": "corrected version of the answer"
+            }`;
+
+      const messages: Message[] = [
+        {
+          role: "system" as const,
+          content: systemPrompt
         },
         {
-          role: "user",
+          role: "user" as const,
           content: `Evaluate this ${languageName} answer:
             
-            Question/Prompt: "${card.front}"
+            Question/Prompt: "${prompt}"
             Student's answer: "${userAnswer}"
-            Context: "${card.context}"
+            Context: "${context}"
+            Correct answer: "${correctAnswer}"
             
             Provide detailed feedback focusing on ${languageName}-specific language usage.`
         }
@@ -318,14 +427,19 @@ export function LanguageFlashcardTrainer({ languageId, languageName }: LanguageF
       const feedbackData = JSON.parse(jsonStr);
       
       // Calculate total score from components
-      const totalScore = 
-        feedbackData.feedback.accuracy.score +
-        feedbackData.feedback.grammar.score +
-        feedbackData.feedback.vocabulary.score +
-        feedbackData.feedback.style.score;
+      const totalScore = activeTab === "practice"
+        ? feedbackData.feedback.accuracy.score +
+          feedbackData.feedback.grammar.score +
+          feedbackData.feedback.vocabulary.score +
+          feedbackData.feedback.style.score
+        : feedbackData.feedback.accuracy.score +
+          feedbackData.feedback.usage.score +
+          feedbackData.feedback.examples.score +
+          feedbackData.feedback.cultural_tips.score;
 
-      // Format the feedback for display
-      const formattedFeedback = `
+      // Format the feedback based on the active tab
+      const formattedFeedback = activeTab === "practice"
+        ? `
 ${feedbackData.feedback.summary}
 
 📝 Accuracy (${feedbackData.feedback.accuracy.score}/30):
@@ -334,17 +448,65 @@ ${feedbackData.feedback.accuracy.comments}
 🔤 Grammar (${feedbackData.feedback.grammar.score}/25):
 ${feedbackData.feedback.grammar.comments}
 ${feedbackData.feedback.grammar.corrections.length > 0 ? 
-  `\nCorrections:\n${feedbackData.feedback.grammar.corrections.map(c => `• ${c}`).join('\n')}` : 
+  `\nCorrections:\n${feedbackData.feedback.grammar.corrections.map((c: string) => `• ${c}`).join('\n')}` : 
   ''}
 
 📚 Vocabulary (${feedbackData.feedback.vocabulary.score}/25):
 ${feedbackData.feedback.vocabulary.comments}
 ${feedbackData.feedback.vocabulary.suggestions.length > 0 ? 
-  `\nSuggestions:\n${feedbackData.feedback.vocabulary.suggestions.map(s => `• ${s}`).join('\n')}` : 
+  `\nSuggestions:\n${feedbackData.feedback.vocabulary.suggestions.map((s: string) => `• ${s}`).join('\n')}` : 
   ''}
 
 ✨ Style & Fluency (${feedbackData.feedback.style.score}/20):
 ${feedbackData.feedback.style.comments}
+
+✅ Improved Answer:
+${feedbackData.improvedAnswer}`
+        : `
+${feedbackData.feedback.summary}
+
+📝 Accuracy (${feedbackData.feedback.accuracy.score}/30):
+${feedbackData.feedback.accuracy.comments}
+
+Alternative Translations:
+${feedbackData.feedback.accuracy.alternatives.map((alt: string) => `• ${alt}`).join('\n')}
+
+Synonyms: ${feedbackData.feedback.accuracy.synonyms.join(', ')}
+Antonyms: ${feedbackData.feedback.accuracy.antonyms.join(', ')}
+
+🔤 Usage (${feedbackData.feedback.usage.score}/25):
+${feedbackData.feedback.usage.comments}
+
+Common Collocations:
+${feedbackData.feedback.usage.collocations.map((col: string) => `• ${col}`).join('\n')}
+
+Expressions:
+${feedbackData.feedback.usage.expressions.map((exp: string) => `• ${exp}`).join('\n')}
+
+Register: ${feedbackData.feedback.usage.register}
+
+📚 Examples (${feedbackData.feedback.examples.score}/25):
+${feedbackData.feedback.examples.sentences.map((sentence: { original: string; translation: string; context: string }) => 
+  `• ${sentence.original}
+   ${sentence.translation}
+   (${sentence.context})`
+).join('\n\n')}
+
+Common Usage Situations:
+${feedbackData.feedback.examples.situations.map((sit: string) => `• ${sit}`).join('\n')}
+
+✨ Cultural & Learning Tips (${feedbackData.feedback.cultural_tips.score}/20):
+Cultural Notes:
+${feedbackData.feedback.cultural_tips.cultural_notes.map((note: string) => `• ${note}`).join('\n')}
+
+Common Mistakes to Avoid:
+${feedbackData.feedback.cultural_tips.common_mistakes.map((mistake: string) => `• ${mistake}`).join('\n')}
+
+Memory Tricks:
+${feedbackData.feedback.cultural_tips.memory_tricks.map((trick: string) => `• ${trick}`).join('\n')}
+
+Related Words:
+${feedbackData.feedback.cultural_tips.related_words.map((word: string) => `• ${word}`).join('\n')}
 
 ✅ Improved Answer:
 ${feedbackData.improvedAnswer}`;
@@ -357,19 +519,21 @@ ${feedbackData.improvedAnswer}`;
       setTotalAttempts(prev => prev + 1);
       setSessionScore(prev => prev + totalScore);
       
-      // Update flashcard data with the attempt
-      await updateFlashcard(currentSet.id, card.id, {
-        lastReviewed: new Date(),
-        nextReview: new Date(Date.now() + (totalScore >= 80 ? 2 : 1) * 24 * 60 * 60 * 1000),
-        repetitions: card.repetitions + 1,
-        easeFactor: card.easeFactor * (
-          totalScore >= 90 ? 1.3 :
-          totalScore >= 80 ? 1.2 :
-          totalScore >= 70 ? 1.1 :
-          totalScore >= 60 ? 1 : 0.9
-        ),
-        interval: card.interval
-      });
+      // Update flashcard data with the attempt if we're in practice mode
+      if (activeTab === "practice" && currentSet) {
+        await updateFlashcard(currentSet.id, (currentItem as Flashcard).id, {
+          lastReviewed: new Date(),
+          nextReview: new Date(Date.now() + (totalScore >= 80 ? 2 : 1) * 24 * 60 * 60 * 1000),
+          repetitions: (currentItem as Flashcard).repetitions + 1,
+          easeFactor: (currentItem as Flashcard).easeFactor * (
+            totalScore >= 90 ? 1.3 :
+            totalScore >= 80 ? 1.2 :
+            totalScore >= 70 ? 1.1 :
+            totalScore >= 60 ? 1 : 0.9
+          ),
+          interval: (currentItem as Flashcard).interval
+        });
+      }
 
       // Show the answer after feedback
       setShowAnswer(true);
@@ -458,6 +622,51 @@ ${feedbackData.improvedAnswer}`;
     });
   };
 
+  const handleNextVocabCard = () => {
+    if (currentVocabIndex < vocabularyItems.length - 1) {
+      setCurrentVocabIndex(prev => prev + 1);
+      resetCardState();
+    } else {
+      // End of vocabulary set
+      const averageScore = Math.round(sessionScore / totalAttempts);
+      toast.success(`Vocabulary practice completed! Average score: ${averageScore}%`);
+      setCurrentVocabIndex(0);
+      resetCardState();
+      setSessionScore(0);
+      setTotalAttempts(0);
+    }
+  };
+
+  const handlePrevVocabCard = () => {
+    if (currentVocabIndex > 0) {
+      setCurrentVocabIndex(prev => prev - 1);
+      setIsFlipped(false);
+    }
+  };
+
+  const renderCard = (card: Flashcard | DBVocabularyItem) => {
+    const isFlashcard = 'front' in card;
+    const front = isFlashcard ? card.front : card.word;
+    const back = isFlashcard ? card.back : card.translation;
+    const context = isFlashcard ? card.context : card.example;
+
+    return (
+      <div className="space-y-4">
+        <div className="text-xl font-semibold">{front}</div>
+        {showAnswer && (
+          <>
+            <div className="text-lg">{back}</div>
+            {context && (
+              <div className="text-sm text-muted-foreground">
+                Context: {context}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[200px]">
@@ -473,6 +682,7 @@ ${feedbackData.improvedAnswer}`;
           <TabsTrigger value="create">Create New</TabsTrigger>
           <TabsTrigger value="saved">Saved Sets</TabsTrigger>
           <TabsTrigger value="practice" disabled={!currentSet}>Practice</TabsTrigger>
+          <TabsTrigger value="vocabulary" disabled={vocabularyItems.length === 0}>Vocabulary</TabsTrigger>
         </TabsList>
 
         <TabsContent value="create">
@@ -613,9 +823,7 @@ ${feedbackData.improvedAnswer}`;
                     >
                       <Card className="min-h-[200px]">
                         <CardContent className="p-6">
-                          <div className="font-medium text-center text-lg">
-                            {currentSet.cards[currentCardIndex].front}
-                          </div>
+                          {renderCard(currentSet.cards[currentCardIndex])}
                         </CardContent>
                       </Card>
 
@@ -678,16 +886,6 @@ ${feedbackData.improvedAnswer}`;
                                   <div className="font-medium">Feedback:</div>
                                   <div className="text-muted-foreground">{feedback.feedback}</div>
                                 </div>
-                                <div className="space-y-2">
-                                  <div className="font-medium">Correct Translation:</div>
-                                  <div>{currentSet.cards[currentCardIndex].back}</div>
-                                </div>
-                                <div className="space-y-2">
-                                  <div className="font-medium">Context:</div>
-                                  <div className="text-muted-foreground">
-                                    {currentSet.cards[currentCardIndex].context}
-                                  </div>
-                                </div>
                               </>
                             )}
                             <Button
@@ -709,6 +907,163 @@ ${feedbackData.improvedAnswer}`;
                   />
                 </CardFooter>
               </Card>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="vocabulary">
+          {isVocabLoading ? (
+            <div className="flex items-center justify-center h-[200px]">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : vocabularyItems.length > 0 ? (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle>Vocabulary Practice</CardTitle>
+                      <CardDescription>
+                        Card {currentVocabIndex + 1} of {vocabularyItems.length}
+                      </CardDescription>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium">Session Score</div>
+                      <div className="text-2xl font-bold">
+                        {totalAttempts > 0 ? Math.round(sessionScore / totalAttempts) : 0}%
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <motion.div
+                      key={currentVocabIndex}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      className="space-y-4"
+                    >
+                      <Card className="min-h-[200px]">
+                        <CardContent className="p-6">
+                          {renderCard(vocabularyItems[currentVocabIndex])}
+                        </CardContent>
+                      </Card>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="answer">Your Answer</Label>
+                        <Textarea
+                          id="answer"
+                          placeholder={`Type your answer in ${languageName}...`}
+                          value={userAnswer}
+                          onChange={(e) => setUserAnswer(e.target.value)}
+                          disabled={showAnswer}
+                        />
+                      </div>
+
+                      {!showAnswer ? (
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={checkAnswer}
+                            disabled={isChecking || !userAnswer.trim()}
+                            className="flex-1"
+                          >
+                            {isChecking ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Checking...
+                              </>
+                            ) : (
+                              "Check Answer"
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={handleSkip}
+                          >
+                            Skip
+                          </Button>
+                        </div>
+                      ) : (
+                        <AnimatePresence>
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-4"
+                          >
+                            {feedback && (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant={feedback.isCorrect ? "default" : "destructive"}>
+                                    Score: {feedback.score}%
+                                  </Badge>
+                                  {feedback.isCorrect && (
+                                    <Badge variant="default">
+                                      <Award className="h-4 w-4 mr-1" />
+                                      Correct!
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-sm space-y-2">
+                                  <div className="font-medium">Feedback:</div>
+                                  <div className="text-muted-foreground whitespace-pre-wrap">{feedback.feedback}</div>
+                                </div>
+                                
+                                {/* Display all vocabulary fields */}
+                                <div className="mt-4 space-y-2 border-t pt-4">
+                                  <div className="font-medium">Vocabulary Details:</div>
+                                  <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div className="font-medium">Source Language:</div>
+                                    <div>{vocabularyItems[currentVocabIndex].source_language_id}</div>
+                                    
+                                    <div className="font-medium">Target Language:</div>
+                                    <div>{vocabularyItems[currentVocabIndex].target_language_id}</div>
+                                    
+                                    <div className="font-medium">Word:</div>
+                                    <div>{vocabularyItems[currentVocabIndex].word}</div>
+                                    
+                                    <div className="font-medium">Translation:</div>
+                                    <div>{vocabularyItems[currentVocabIndex].translation}</div>
+                                    
+                                    <div className="font-medium">Example:</div>
+                                    <div>{vocabularyItems[currentVocabIndex].example}</div>
+                                    
+                                    <div className="font-medium">Context:</div>
+                                    <div>{vocabularyItems[currentVocabIndex].context}</div>
+                                    
+                                    <div className="font-medium">Difficulty:</div>
+                                    <div>{vocabularyItems[currentVocabIndex].difficulty}</div>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            <Button
+                              onClick={handleNextVocabCard}
+                              className="w-full"
+                            >
+                              {currentVocabIndex === vocabularyItems.length - 1 ? "Finish Set" : "Next Card"}
+                            </Button>
+                          </motion.div>
+                        </AnimatePresence>
+                      )}
+                    </motion.div>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Progress 
+                    value={(currentVocabIndex + 1) / vocabularyItems.length * 100} 
+                    className="w-full"
+                  />
+                </CardFooter>
+              </Card>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <h2 className="text-xl font-semibold mb-2">No Vocabulary Available</h2>
+              <p className="text-muted-foreground mb-4">
+                There are no vocabulary items available for practice. Try adding some vocabulary first.
+              </p>
             </div>
           )}
         </TabsContent>
