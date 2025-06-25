@@ -46,7 +46,7 @@ export async function generateVocabularyContent({ word, source_language_id, targ
       const parsedContent: VocabularyResponse = JSON.parse(cleanContent);
       
       // Format the example as a single string with both languages
-      const exampleText = `${parsedContent.example[source_language_id]}\n${parsedContent.example[target_language_id]}`;
+      const exampleText = `${parsedContent.example}`;
       
       return {
         translation: parsedContent.translation,
